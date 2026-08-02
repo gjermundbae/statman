@@ -1,0 +1,142 @@
+# Metrikkatalogen. Seks felt. Fylles ut for hånd.
+# `caveats` og `breaks` er de to som betyr noe — de er forskjellen på en
+# tallpakke en journalist kan forsvare og en de ikke kan.
+
+kraftpris_nominell:
+  label: Kraftpris, nominell
+  model: mart.kraftpris_maaned
+  column: ore_nominell
+  unit: øre/kWh
+  source: SYNTETISK — generert av statman.sources.synthetic, ikke ekte statistikk
+  caveats:
+    - Nominelle kroner. Kan ikke sammenlignes over tid uten deflatering.
+    - Spotpris uten nettleie, avgifter og strømstøtte. Ikke det folk betaler.
+  breaks: []
+
+kraftpris_realt:
+  label: Kraftpris i faste kroner
+  model: mart.kraftpris_maaned
+  column: ore_faste_kroner
+  unit: øre/kWh, faste kroner (siste måned i serien)
+  source: SYNTETISK — generert av statman.sources.synthetic, ikke ekte statistikk
+  caveats:
+    - Deflatert med totalindeks KPI. Merk at kraft selv inngår i KPI, så
+      deflatering med totalindeks demper utslaget noe.
+    - Referansemåned er siste måned i serien, så hele serien flytter seg når
+      nye måneder kommer til. Oppgi alltid referansemåned i grafteksten.
+  breaks: []
+
+kraftpris_endring_12m:
+  label: Kraftpris, 12-måneders realendring
+  model: mart.kraftpris_maaned
+  column: endring_12m_realt
+  unit: andel (0.031 = 3,1 %)
+  source: SYNTETISK — generert av statman.sources.synthetic, ikke ekte statistikk
+  caveats:
+    - Null for de tolv første månedene i serien.
+    - Basiseffekt — store utslag i 2023 skyldes hovedsakelig nivået i 2022,
+      ikke prisen i 2023. Kommenter alltid nivå sammen med endring.
+  breaks: []
+
+# --------------------------------------------------------------------------
+# Befolkning. Ekte tall fra SSB, 2011–2025.
+# --------------------------------------------------------------------------
+
+folkemengde:
+  label: Folkemengde i kommunen
+  model: mart.befolkning_kommune_aar
+  column: folkemengde
+  unit: personer
+  source: SSB tabell 06913, kodeliste agg_KommSummerHist (Kommuner 2024)
+  caveats:
+    - Bestand per 1. januar i året på raden. Endringstallene på samme rad
+      gjelder derimot kalenderåret som følger. Folkemengde 2026 er altså
+      1.1.2026, og folketilvekst 2025 er veksten som førte dit.
+    - Registrerte bosatte etter Folkeregisteret. Personer med forventet
+      opphold under seks måneder, og asylsøkere uten innvilget opphold, er
+      ikke med. De blir talt fra den dagen de får opphold, og teller da som
+      innflytting til kommunen de bor i.
+    - Summen over de 357 kommunene er 53 011 lavere enn Norges folketall til
+      og med 2019, og stemmer fra 2020. Differansen er historikken til
+      kommuner som ble delt i 2020, som SSB ikke tilordner noen kommune i
+      dagens inndeling. Bruk mart.befolkning_fylke_aar til lands- og
+      fylkestall.
+  breaks:
+    - Fem kommuner har folkemengde 0 før 2020 fordi de ble dannet av
+      kommuner som ble delt — Narvik og Hábmer-Hamarøy (Tysfjord), Heim,
+      Hitra og Orkland (Snillfjord). Det er ikke befolkning som mangler,
+      det er en inndeling som ikke fantes. Kolonnen aar_uten_folketall
+      teller årene.
+    - 1.1.2024 ble Ålesund delt i Ålesund (1508) og Haram (1580). Haram var
+      egen kommune også til og med 2019, sto med 0 innbyggere 2020–2023 mens
+      den var en del av Ålesund, og er tilbake fra 2024. Serien er brutt to
+      ganger og kan ikke brukes uten å håndtere begge.
+    - Grensejusteringer i 2017 (Stokke delt mellom Tønsberg og Sandefjord),
+      2019, 2020, 2022, 2024 og 2026. Alle er merket i kolonnen grenseavvik.
+
+folkevekst_pst:
+  label: Befolkningsvekst over perioden
+  model: mart.befolkningsvekst
+  column: vekst_pst
+  unit: andel (0.144 = 14,4 %)
+  source: SSB tabell 06913, kodeliste agg_KommSummerHist (Kommuner 2024)
+  caveats:
+    - Måler 1.1.2011 mot 1.1.2026, altså veksten gjennom kalenderårene
+      2011–2025. Periodens lengde står i kolonnene aar_start og aar_slutt,
+      ikke i navnet på metrikken.
+    - Gjelder bare kommuner med sammenlignbar = true. 34 av 357 kommuner
+      byttet grenser eller mangler historikk, og har rangering = null.
+      Prosenten deres måler grenseendringen, ikke befolkningsutviklingen.
+    - Sammenlignbar krever at det største enkeltavviket er under 0,5 prosent
+      av folketallet, ikke at det er null. Terskelen er en vurdering. De
+      faktiske avvikene ligger i grenseavvik_sum og grenseavvik_maks_pst, så
+      en strengere eller løsere grense kan settes uten å bygge om noe.
+    - Prosentvekst er ustabil i små kommuner. En kommune med 500 innbyggere
+      flytter seg 10 prosent på 50 personer. Oppgi alltid folkemengden
+      sammen med prosenten.
+    - Enkeltinstitusjoner slår gjennom. Råde vokste 9 prosent i 2022 og falt
+      5 prosent i 2023 fordi ankomstsenteret der ble fylt og tømt. Slike
+      utslag er ekte registrerte bosatte, men de er ikke det folk leser inn
+      i «befolkningsvekst».
+  breaks: []
+
+folkevekst:
+  label: Befolkningsvekst over perioden, antall
+  model: mart.befolkningsvekst
+  column: vekst
+  unit: personer
+  source: SSB tabell 06913, kodeliste agg_KommSummerHist (Kommuner 2024)
+  caveats:
+    - Differansen mellom to bestandstall, ikke summen av endringene. For
+      kommuner med grenseavvik er de to ikke like — det er nettopp det
+      grenseavvik måler, og identiteten
+      vekst = folketilvekst_sum + grenseavvik_sum er en sjekk på modellen.
+  breaks: []
+
+fodselsoverskudd_sum:
+  label: Fødselsoverskudd, sum over perioden
+  model: mart.befolkningsvekst
+  column: fodselsoverskudd_sum
+  unit: personer
+  source: SSB tabell 06913, kodeliste agg_KommSummerHist (Kommuner 2024)
+  caveats:
+    - Levendefødte minus døde blant registrerte bosatte i kommunen.
+    - Negativt i 200 av 323 sammenlignbare kommuner i 2011–2025. Det er
+      normaltilstanden i norske kommuner, ikke et avvik som skal forklares.
+  breaks: []
+
+nettoinnflytting_sum:
+  label: Nettoinnflytting, sum over perioden
+  model: mart.befolkningsvekst
+  column: nettoinnflytting_sum
+  unit: personer
+  source: SSB tabell 06913, kodeliste agg_KommSummerHist (Kommuner 2024)
+  caveats:
+    - Flytting mellom norske kommuner teller likt med inn- og utvandring.
+      Summen over alle kommuner er derfor ikke nettoinnvandringen til Norge,
+      og en kommunes tall sier ingenting om hvor folk kom fra.
+    - Fødselsoverskudd pluss nettoinnflytting er ikke alltid nøyaktig lik
+      folketilveksten. Restleddet er lite — 1 person i median per kommuneår,
+      267 på det meste — og ligger i kolonnen restledd i stedet for å bli
+      fordelt på komponentene.
+  breaks: []

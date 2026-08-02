@@ -1,0 +1,11 @@
+data/
+output/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+uv.lock
+.DS_Store
+**/.DS_Store
+.claude/
