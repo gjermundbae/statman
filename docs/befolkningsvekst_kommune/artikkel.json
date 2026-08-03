@@ -1,0 +1,566 @@
+{
+  "schema": "statman/artikkel/1",
+  "slug": "befolkningsvekst_kommune",
+  "title": "Befolkningsvekst i norske kommuner, 2011–2025",
+  "kicker": "Befolkning · SSB tabell 06913",
+  "lead": "Alle 357 kommuner i 2024-inndelingen. Folkemengde 1.1.2011 målt mot 1.1.2026. Det egentlige arbeidet i denne saken er ikke å regne ut prosentvekst, men å vite hvilke kommuner man *ikke* kan regne prosentvekst for.",
+  "published": "2026-08-02",
+  "sections": [
+    {
+      "title": "Funn",
+      "blocks": [
+        {
+          "type": "stats",
+          "items": [
+            {
+              "value": "707 095",
+              "label": "Flere innbyggere",
+              "note": "2011–2025"
+            },
+            {
+              "value": "+14,4 %",
+              "label": "Vekst i Norge",
+              "note": "over perioden"
+            },
+            {
+              "value": "69 %",
+              "label": "Av veksten er flytting",
+              "note": "30 % er fødselsoverskudd"
+            },
+            {
+              "value": "119",
+              "label": "Kommuner med nedgang",
+              "note": "av 323 sammenlignbare"
+            }
+          ]
+        },
+        {
+          "type": "findings",
+          "items": [
+            "Norge vokste fra 4 920 305 til 5 627 400 innbyggere, 707 095 personer eller +14,4 %.",
+            "Veksten er flytting, ikke fødsler: av de 707 095 nye innbyggerne kommer 491 174 fra nettoinnflytting og 214 379 fra fødselsoverskudd — 69 mot 30 prosent. De siste 1 542 er restleddet SSB ikke fordeler.",
+            "Fødselsoverskuddet er negativt i 200 av 323 sammenlignbare kommuner. I 84 kommuner er nettoinnflyttingen alene større enn hele veksten — de vokser altså *på tross av* at det dør flere enn det fødes.",
+            "Veksten er skjevt fordelt: 264 av 323 kommuner vokste saktere enn landet, og 119 hadde direkte nedgang.",
+            "Sterkest vekst: **Lørenskog** (Akershus), +54,7 % — men fra 33 308 innbyggere. Svakest: **Røst** (Nordland), -22,1 %.",
+            "Fylkesvis spenner det fra +27,0 % i Akershus til +2,5 % i Finnmark."
+          ]
+        },
+        {
+          "type": "figure",
+          "file": "vekst_topp_bunn.png",
+          "alt": "To liggende søylediagram: de 20 kommunene med størst vekst og de 20 med størst nedgang, i prosent.",
+          "caption": "Prosentvekst rangerer små kommuner til topps og til bunns. Folketallet står ved siden av hver søyle, fordi 27 prosent i en kommune med 1 257 innbyggere er noe annet enn 27 prosent i Oslo.",
+          "source": "Kilde: SSB tabell 06913. Kommuner med grenseendring over 0,5 % av folketallet er holdt utenfor.",
+          "width": "full"
+        },
+        {
+          "type": "figure",
+          "file": "komponenter.png",
+          "alt": "Punktdiagram: fødselsoverskudd langs x-aksen, nettoinnflytting langs y-aksen, én prikk per kommune.",
+          "caption": "Den stiplede diagonalen er nullvekst. At skyen ligger langt mer spredt loddrett enn vannrett, er det samme funnet som i punktet over — sett fra siden.",
+          "source": "Kilde: SSB tabell 06913. Kommuner med grenseendring over 0,5 % av folketallet er holdt utenfor.",
+          "width": "bred"
+        }
+      ]
+    },
+    {
+      "title": "Fylker",
+      "blocks": [
+        {
+          "type": "table",
+          "columns": [
+            "Fylke",
+            "Kommuner",
+            "1.1.2011",
+            "1.1.2026",
+            "Vekst",
+            "Herav flytting"
+          ],
+          "rows": [
+            [
+              "Akershus",
+              "21",
+              "589 763",
+              "749 207",
+              "+27,0 %",
+              "124 850"
+            ],
+            [
+              "Oslo",
+              "1",
+              "599 230",
+              "728 714",
+              "+21,6 %",
+              "47 732"
+            ],
+            [
+              "Rogaland",
+              "23",
+              "436 087",
+              "508 922",
+              "+16,7 %",
+              "34 159"
+            ],
+            [
+              "Østfold",
+              "12",
+              "274 149",
+              "316 448",
+              "+15,4 %",
+              "41 821"
+            ],
+            [
+              "Agder",
+              "25",
+              "282 456",
+              "323 930",
+              "+14,7 %",
+              "30 416"
+            ],
+            [
+              "Vestfold",
+              "6",
+              "227 211",
+              "259 332",
+              "+14,1 %",
+              "30 686"
+            ],
+            [
+              "Buskerud",
+              "18",
+              "239 185",
+              "272 981",
+              "+14,1 %",
+              "29 801"
+            ],
+            [
+              "Trøndelag",
+              "38",
+              "429 928",
+              "489 166",
+              "+13,8 %",
+              "40 920"
+            ],
+            [
+              "Vestland",
+              "43",
+              "590 775",
+              "658 342",
+              "+11,4 %",
+              "36 775"
+            ],
+            [
+              "Møre og Romsdal",
+              "27",
+              "251 389",
+              "273 169",
+              "+8,7 %",
+              "16 447"
+            ],
+            [
+              "Troms",
+              "21",
+              "158 879",
+              "171 218",
+              "+7,8 %",
+              "7 656"
+            ],
+            [
+              "Telemark",
+              "17",
+              "169 185",
+              "177 923",
+              "+5,2 %",
+              "11 422"
+            ],
+            [
+              "Innlandet",
+              "46",
+              "362 696",
+              "379 488",
+              "+4,6 %",
+              "29 577"
+            ],
+            [
+              "Nordland",
+              "41",
+              "235 955",
+              "243 272",
+              "+3,1 %",
+              "8 101"
+            ],
+            [
+              "Finnmark",
+              "18",
+              "73 417",
+              "75 288",
+              "+2,5 %",
+              "811"
+            ]
+          ],
+          "align": [
+            "left",
+            "right",
+            "right",
+            "right",
+            "right",
+            "right"
+          ],
+          "caption": "Klikk på en kolonneoverskrift for å sortere."
+        },
+        {
+          "type": "figure",
+          "file": "fylke.png",
+          "alt": "Liggende søyler per fylke, delt i nettoinnflytting og fødselsoverskudd.",
+          "caption": "Samme tabell som graf, med veksten delt i de to komponentene.",
+          "source": "Kilde: SSB tabell 06913, fylkesserien. Sorte punkter er samlet vekst; avviket fra søylene er restleddet SSB ikke fordeler.",
+          "width": "bred"
+        }
+      ]
+    },
+    {
+      "title": "År for år",
+      "blocks": [
+        {
+          "type": "figure",
+          "file": "aarlig_utvikling.png",
+          "alt": "Tre paneler med én tynn grå linje per kommune, median og persentilbånd lagt over.",
+          "caption": "Samlet tilvekst, nettoinnflytting og fødselsoverskudd, år for år. Panelene deler y-akse med vilje: fødselsoverskuddet holder seg innenfor et par prosent i alle kommuner alle år, mens flyttingen spriker. Med hver sin akse ville de sett like ut.",
+          "source": "Kilde: SSB tabell 06913. «Hele landet» er summen av endringene delt på samlet folketall, ikke medianen av kommunene.",
+          "width": "full"
+        },
+        {
+          "type": "figure",
+          "file": "aarlig_ekstremer.png",
+          "alt": "Samme tre komponenter, men bare de fem høyeste og fem laveste kommunene, navngitt.",
+          "caption": "Spaghettigrafen over viser fordelingen og skjuler kommunene; denne gjør det motsatte. Utvalget er de 5 høyeste og laveste på kumulativ rate over hele perioden, ikke på enkeltår.",
+          "source": "Kilde: SSB tabell 06913. Hvert panel har sin egen y-akse. Bare sammenlignbare kommuner.",
+          "width": "full"
+        }
+      ]
+    },
+    {
+      "title": "Metode",
+      "blocks": [
+        {
+          "type": "findings",
+          "items": [
+            "Kilde: SSB tabell 06913, «06913: Befolkning og endringer, etter region og år». SSB oppdaterte tabellen 2026-04-15; hentet 2026-08-02T22:51:00Z, sha256 64045d19d407…",
+            "Modellene `mart.befolkning_kommune_aar`, `mart.befolkning_fylke_aar` og `mart.befolkningsvekst`, bygget av statman 2026-08-02 22:51:00Z. Råversjonen over er den byggeloggen oppgir, ikke den som tilfeldigvis er nyest nå.",
+            "Kommuneinndeling: SSBs kodeliste `agg_KommSummerHist` («Kommuner 2024, sammenslåtte tidsserier»). Den summerer historikken til sammenslåtte kommuner opp til dagens grenser, så kommunereformene i 2018 og 2020 gir ikke seriebrudd. Fylkestallene bruker `agg_KommFylkerHist`, som gjør det samme for fylker — ikke `agg_Fylker2024`, som bare har tallene for fylkene slik de faktisk het det året og summerer seg til 1,5 millioner i 2011.",
+            "Kodelista reverserer derimot ikke *delinger*, og fanger ikke grensejusteringer. Vi finner dem i stedet i tallene: der endringen i folkemengde ikke er lik folketilveksten SSB oppgir, har grensene flyttet seg. Differansen ligger i kolonnen `grenseavvik`.",
+            "Vi krever ikke at avviket er null, men at det største enkeltavviket er under 0,5 % av folketallet. Uten en toleranse ville en grensejustering på 29 personer kastet Drammen ut av statistikken. Kommuner over terskelen er merket `sammenlignbar = false` og holdt utenfor rangering og topplister; de nøyaktige avvikene står i `grenseavvik_sum` og `grenseavvik_maks_pst` for alle kommuner.",
+            "Det ga 34 utelatte kommuner av 357.",
+            "Kontroll: for de 351 kommunene som har folketall hele perioden, summerer grenseavvikene seg til -7 personer. Grensejusteringer flytter folk mellom kommuner, så summen skal være null. De resterende 53 846 tilhører de 6 kommunene som ble dannet av delte kommuner i 2020, og er de samme personene som mangler i kommunetabellen før det året."
+          ]
+        },
+        {
+          "type": "table",
+          "columns": [
+            "Kommune",
+            "Fylke",
+            "Grenseavvik",
+            "Største enkeltavvik",
+            "Hva som skjedde"
+          ],
+          "rows": [
+            [
+              "Haram",
+              "Møre og Romsdal",
+              "+5",
+              "99,7 %",
+              "Skilt ut fra Ålesund 1.1.2024, egen kommune også før 2020"
+            ],
+            [
+              "Ålesund",
+              "Møre og Romsdal",
+              "-21",
+              "16,6 %",
+              "Haram skilt ut igjen 1.1.2024"
+            ],
+            [
+              "Vestnes",
+              "Møre og Romsdal",
+              "+411",
+              "6,3 %",
+              "Grensejustering 1.1.2021"
+            ],
+            [
+              "Stad",
+              "Vestland",
+              "+533",
+              "6,0 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Rauma",
+              "Møre og Romsdal",
+              "-411",
+              "5,5 %",
+              "Grensejustering 1.1.2021"
+            ],
+            [
+              "Tønsberg",
+              "Vestfold",
+              "+2 061",
+              "4,3 %",
+              "Stokke delt mellom Tønsberg og Sandefjord 1.1.2017"
+            ],
+            [
+              "Midt-Telemark",
+              "Telemark",
+              "-442",
+              "4,0 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Sandefjord",
+              "Vestfold",
+              "-2 236",
+              "3,5 %",
+              "Stokke delt mellom Tønsberg og Sandefjord 1.1.2017"
+            ],
+            [
+              "Notodden",
+              "Telemark",
+              "+442",
+              "3,5 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Nes",
+              "Akershus",
+              "+682",
+              "3,1 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Kinn",
+              "Vestland",
+              "-533",
+              "3,0 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Hjelmeland",
+              "Rogaland",
+              "-77",
+              "2,9 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Høyanger",
+              "Vestland",
+              "+110",
+              "2,7 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Evje og Hornnes",
+              "Agder",
+              "+92",
+              "2,5 %",
+              "Grensejustering 1.1.2019"
+            ],
+            [
+              "Eidfjord",
+              "Vestland",
+              "+22",
+              "2,4 %",
+              "Grensejustering 1.1.2022"
+            ],
+            [
+              "Birkenes",
+              "Agder",
+              "-92",
+              "1,8 %",
+              "Grensejustering 1.1.2019"
+            ],
+            [
+              "Tvedestrand",
+              "Agder",
+              "+101",
+              "1,6 %",
+              "Grensejustering 1.1.2025"
+            ],
+            [
+              "Risør",
+              "Agder",
+              "-101",
+              "1,5 %",
+              "Grensejustering 1.1.2025"
+            ],
+            [
+              "Strand",
+              "Rogaland",
+              "+162",
+              "1,3 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Ås",
+              "Akershus",
+              "-213",
+              "1,0 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Volda",
+              "Møre og Romsdal",
+              "+81",
+              "1,0 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Ørsta",
+              "Møre og Romsdal",
+              "-104",
+              "1,0 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Sogndal",
+              "Vestland",
+              "-110",
+              "0,9 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Lillestrøm",
+              "Akershus",
+              "-682",
+              "0,8 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Indre Fosen",
+              "Trøndelag",
+              "+69",
+              "0,7 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Holmestrand",
+              "Vestfold",
+              "+148",
+              "0,6 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Ullensvang",
+              "Vestland",
+              "-89",
+              "0,6 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Nærøysund",
+              "Trøndelag",
+              "-52",
+              "0,5 %",
+              "Grensejustering 1.1.2020"
+            ],
+            [
+              "Vestre Slidre",
+              "Innlandet",
+              "-11",
+              "0,5 %",
+              "Grensejustering 1.1.2021"
+            ],
+            [
+              "Hábmer - Hamarøy",
+              "Nordland",
+              "+2 766",
+              "—",
+              "Ny kommune 2020 av Hamarøy og deler av Tysfjord"
+            ],
+            [
+              "Hitra",
+              "Trøndelag",
+              "+5 050",
+              "—",
+              "Utvidet 2020 med deler av Snillfjord"
+            ],
+            [
+              "Orkland",
+              "Trøndelag",
+              "+18 217",
+              "—",
+              "Ny kommune 2020 av Orkdal, Meldal m.fl. og deler av Snillfjord"
+            ],
+            [
+              "Narvik",
+              "Nordland",
+              "+21 845",
+              "—",
+              "Ny kommune 2020 av Narvik, Ballangen og deler av Tysfjord"
+            ],
+            [
+              "Heim",
+              "Trøndelag",
+              "+5 963",
+              "—",
+              "Ny kommune 2020 av Hemne, Halsa og deler av Snillfjord"
+            ]
+          ],
+          "align": [
+            "left",
+            "left",
+            "right",
+            "right",
+            "left"
+          ],
+          "caption": "De 34 kommunene som er holdt utenfor rangeringen, og hvorfor."
+        },
+        {
+          "type": "findings",
+          "items": [
+            "**53 011 personer mangler i kommunetabellen i 2011.** Kommuner som ble *delt* i 2020 — Tysfjord og Snillfjord — har en historikk som ikke lar seg tilordne én kommune i dagens inndeling. SSB legger den i samlekategorien «Delte kommuner og uoppgitt», som ikke er noen kommune og derfor ikke er med her. Summen av de 357 kommunene er altså 53 011 lavere enn Norges folketall til og med 2019, og null lavere fra 2020. Landstallene og fylkestabellen her er hentet fra fylkesserien, som har dem med.",
+            "Ingen justering for at kommuner er ulike i størrelse. Prosentvekst og absolutt vekst gir to forskjellige topplister; CSV-en har begge."
+          ]
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "folkevekst_pst",
+    "fodselsoverskudd_sum",
+    "nettoinnflytting_sum",
+    "folkemengde"
+  ],
+  "provenance": {
+    "Kilde": "SSB tabell 06913 — 06913: Befolkning og endringer, etter region og år",
+    "Oppdatert": "2026-04-15",
+    "Hentet": "2026-08-02T22:51:00Z",
+    "sha256": "64045d19d4071ad15507d34bd5ac222f6b885f5231bc15bc8652e25dc6d23389",
+    "Kodeliste": "agg_KommSummerHist · agg_KommFylkerHist",
+    "Modeller": "mart.befolkning_kommune_aar · mart.befolkning_fylke_aar · mart.befolkningsvekst",
+    "Bygget": "2026-08-02 22:51:00Z"
+  },
+  "files": [
+    [
+      "befolkningsvekst_kommune.csv",
+      "alle kommuner, alle kolonner"
+    ],
+    [
+      "vekst_topp_bunn.png",
+      "topp og bunn på prosentvekst"
+    ],
+    [
+      "aarlig_utvikling.png",
+      "årlig rate per kommune, tre paneler med felles akse"
+    ],
+    [
+      "aarlig_ekstremer.png",
+      "de fem høyeste og laveste per komponent, navngitt"
+    ],
+    [
+      "komponenter.png",
+      "fødselsoverskudd mot nettoinnflytting"
+    ],
+    [
+      "fylke.png",
+      "fylkesvis vekst delt i komponenter"
+    ]
+  ]
+}

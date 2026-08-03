@@ -55,6 +55,17 @@ def output_dir() -> Path:
     return project_root() / "output"
 
 
+def docs_dir() -> Path:
+    """Der publiserte artikler ligger.
+
+    Heter ``docs/`` fordi GitHub Pages kan servere nettopp den mappa fra
+    hovedgrenen uten workflow eller bygg. Dette er det eneste genererte i
+    prosjektet som *ikke* er gitignorert — en publisert side må ligge i git
+    for å kunne hostes.
+    """
+    return project_root() / "docs"
+
+
 def catalog_path() -> Path:
     return project_root() / "catalog" / "metrics.yml"
 

@@ -126,6 +126,45 @@ def ssb_codelist(codelist_id: Annotated[str, typer.Argument(help="F.eks. agg_Kom
         typer.echo(f"  … og {len(values) - 20} til")
 
 
+@app.command()
+def publish(
+    slugs: Annotated[
+        list[str] | None,
+        typer.Argument(help="Sakspakker i output/. Tomt = alle som er klare."),
+    ] = None,
+) -> None:
+    """Publiser ferdige sakspakker som artikler i docs/.
+
+    Leser `artikkel.json` fra sakspakken og skriver en selvstendig HTML-side
+    per sak, pluss arkivsida. Ingenting regnes ut på nytt — tallene er de som
+    lå i sakspakken.
+    """
+    from statman.publish import site
+
+    try:
+        written = site.publish_all(slugs or None)
+    except (site.PublishError, FileNotFoundError, ValueError) as feil:
+        typer.secho(str(feil), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from None
+    for path in written:
+        typer.echo(str(path))
+
+
+@app.command("published")
+def list_published() -> None:
+    """Vis hva som ligger i docs/, og hva som står klart i output/."""
+    from statman.publish import site
+
+    for article in site.published():
+        dato = article.published or "—"
+        typer.echo(f"{dato}  {article.slug:<32} {article.title}")
+
+    ute = {a.slug for a in site.published()}
+    klare = [p.name for p in site.packages() if p.name not in ute]
+    if klare:
+        typer.echo(f"\nKlar til publisering: {', '.join(klare)}")
+
+
 # Ende-til-ende-eksempler. Hvert modul har `ingest()`, `MODELS` og `main()`.
 EXAMPLES: dict[str, str] = {
     "kraftpris": "examples.kraftpris_chart",

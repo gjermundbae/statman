@@ -473,6 +473,7 @@ def test_sakspakke_is_written(built: dict[str, registry.BuildResult], project: P
         "komponenter.png",
         "fylke.png",
         "notat.md",
+        "artikkel.json",
     }
     assert all(p.exists() and p.stat().st_size > 0 for p in written)
     for png in (p for p in written if p.suffix == ".png"):

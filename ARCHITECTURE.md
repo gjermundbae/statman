@@ -35,11 +35,13 @@ gjør — og dermed på hva som ikke får skje i dem.
 | `clean` | Én kilde, typet, normaliserte navn, lang form | Parquet | ingen valg — krever noe en vurdering, hører det i mart |
 | `mart` | Analyseklare tabeller, koblet på tvers | Parquet | hvert valg begrunnes der det tas |
 | `catalog` | Definisjon, enhet, kilde, forbehold, seriebrudd | YAML | ingen tall som kan telles |
-| `output` | Sakspakke: data, graf, notat | filer | forbeholdene følger tallene ut |
+| `output` | Sakspakke: data, graf, notat, artikkelspesifikasjon | filer | forbeholdene følger tallene ut |
+| `publish` | Artikkel: én selvstendig side, og arkivet | HTML | ingenting regnes ut her |
 
 `raw → clean` er mekanisk. `clean → mart` er der valgene tas. `catalog` er der
 det står hvorfor. Analysen leser fra `mart` og skriver til `output` — den går
-aldri direkte i `raw`, bortsett fra for å lese proveniens.
+aldri direkte i `raw`, bortsett fra for å lese proveniens. `publish` leser bare
+fra `output`.
 
 Skillet mellom `clean` og `mart` er det som bærer mest. Når en transformasjon
 er vanskelig å plassere, er spørsmålet om den kunne vært gjort annerledes av en
@@ -93,6 +95,39 @@ opptalte tall ikke hjemme der: «negativt i de fleste kommuner» er et varig
 forbehold, «negativt i 200 av 323» er et funn som regnes ut i sakspakken og
 forvitrer i katalogen.
 
+## Publisering
+
+Publiseringslaget har én regel, og den er streng: **det regner ingenting ut.**
+Alle tall kommer inn ferdig formatert, alle forbehold kommer fra katalogen. En
+renderer som ikke kan regne, kan heller ikke regne feil — og da er det trygt å
+la den være leken.
+
+Seamen er en fil. Når en analyse er ferdig, skriver den en `Article` — tittel,
+ingress, seksjoner, figurer, tabeller med ferdige celler, metrikknøklene
+forbeholdene skal hentes fra, og proveniensen fra byggeloggen — ned som
+`artikkel.json` i sakspakken. `statman publish` leser den derfra. Det er derfor
+publisering ikke trenger å importere analysen som lagde tallene, og derfor en
+notebook kan publiseres på nøyaktig samme måte som et eksempel.
+
+Notatet i sakspakken rendres fra den samme `Article`. Det er samme grep som at
+forbehold hentes fra katalogen framfor å skrives på nytt, løftet ett nivå opp:
+`notat.md` og den publiserte sida er ikke to tekster som ligner, de er én tekst
+i to former.
+
+Publisering er sin egen kommando, ikke et steg i `example`. Det å være fornøyd
+med et resultat er en vurdering, og vurderinger hører ikke hjemme i en pipeline.
+
+Sida er ett dokument. CSS og JS ligger inne i fila, det finnes ingen fonter,
+biblioteker eller sporing utenfra, og en sjekk stopper publiseringen om noe
+skulle bli hentet over nettet likevel. Det gjør at sida virker fra disk, at den
+kan arkiveres som én fil, og at den ikke råtner når et CDN legges ned.
+
+Arkivet bygges av det som ligger i `docs/`, ikke av det som ligger i `output/`.
+`output/` er gitignorert og tomt i en fersk klone; `docs/` er det som faktisk er
+publisert. Mappa heter `docs/` fordi GitHub Pages kan servere nettopp den fra
+hovedgrenen uten workflow og uten byggesteg — ingen server, ingen orkestrator,
+også her.
+
 ## Bevisst utsatt
 
 Reservert, ikke glemt. Hver av dem bygges når en konkret analyse krever det:
@@ -109,7 +144,14 @@ Reservert, ikke glemt. Hver av dem bygges når en konkret analyse krever det:
 - **Inkrementell bygging.** Når full rebuild ikke lenger går på sekunder.
 - **Avviksmonitor.** Krever ingest på skjema, altså automatisering først.
 - **Scheduling.** Når manuell kjøring blir irriterende, ikke før.
-- **Nettside / arkiv / nyhetsbrev.** Etter tre sakspakker.
+- ~~**Nettside / arkiv.**~~ *Bygget, ett hakk før den opprinnelige terskelen på
+  tre sakspakker.* Grunnen til å ta det nå og ikke etterpå: formen på en
+  sakspakke bestemmes av den som skriver den, og seamen mot publisering måtte
+  finnes **før** sakspakke nummer tre, ikke etter. Arkivet er en liste. Blir
+  det mange nok saker til at en liste ikke holder, er søk og emneknagger neste.
+- **Nyhetsbrev.** Fortsatt utsatt. Krever at noen abonnerer.
+- **Figurer som SVG.** matplotlib kan skrive begge deler. Gjøres når en figur
+  faktisk ser dårlig ut på en skjerm den ble publisert til, ikke før.
 - **Objektlagring og backup for rådata.** `data/` er gitignorert, så rådata,
   byggelogger og sakspakker finnes i dag bare på maskinen de ble laget på.
   Rådata er reproduserbart via konnektorene, men ikke bit for bit hvis kilden

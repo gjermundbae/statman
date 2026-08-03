@@ -7,7 +7,8 @@ Ekte tall fra SSB, hele veien fra API-kall til sakspakke. Kjeden er:
       -> clean.befolkning_kommune, clean.befolkning_fylke
       -> mart.befolkning_kommune_aar, mart.befolkning_fylke_aar
       -> mart.befolkningsvekst
-      -> output/befolkningsvekst_kommune/
+      -> output/befolkningsvekst_kommune/     (sakspakke)
+      -> statman publish befolkningsvekst_kommune  -> docs/   (artikkel)
 
 Det egentlige arbeidet i denne saken er ikke å regne ut prosentvekst. Det er
 å vite hvilke kommuner man *ikke* kan regne prosentvekst for. Femten år
@@ -29,7 +30,7 @@ matplotlib.use("Agg")  # ingen skjerm, skriver rett til fil
 import matplotlib.pyplot as plt  # noqa: E402
 import polars as pl  # noqa: E402
 
-from statman import catalog, io, jsonstat  # noqa: E402
+from statman import io, jsonstat, publish  # noqa: E402
 from statman.models.clean_ssb_befolkning import RAW_FYLKE, RAW_KOMMUNE, VARIABLER  # noqa: E402
 from statman.models.mart_befolkning import PERIODE_AAR, TOLERANSE  # noqa: E402
 from statman.sources import ssb  # noqa: E402
@@ -611,7 +612,7 @@ def _plot_fylke(fylke: pl.DataFrame, path: Path, periode: str, aar_start: int) -
 
 
 # --------------------------------------------------------------------------
-# Notat
+# Artikkel — notatet og den publiserte sida rendres begge herfra
 # --------------------------------------------------------------------------
 def _fylkesperiode(
     fylke_aar: pl.DataFrame, vekst: pl.DataFrame, aar_start: int, aar_slutt: int
@@ -647,13 +648,18 @@ def _fylkesperiode(
     )
 
 
-def _notat(
+def artikkel(
     vekst: pl.DataFrame,
     fylke: pl.DataFrame,
-    path: Path,
     periode: str,
     proveniens: dict[str, str],
-) -> Path:
+) -> publish.Article:
+    """Sakspakken som struktur. Notatet og nettsida rendres begge fra denne.
+
+    Alt som skal stå i teksten regnes ut her. Publiseringslaget regner
+    ingenting — det får ferdig formaterte strenger, og kan derfor ikke
+    komme til å vise et annet tall enn det som står i CSV-en.
+    """
     alle = vekst
     sml = vekst.filter(pl.col("sammenlignbar"))
     utelatt = vekst.filter(~pl.col("sammenlignbar")).sort(
@@ -680,128 +686,267 @@ def _notat(
         (pl.col("vekst") > 0) & (pl.col("nettoinnflytting_sum") > pl.col("vekst"))
     ).height
 
-    lines = [
-        f"# Befolkningsvekst i norske kommuner, {periode}",
-        "",
-        f"Alle {alle.height} kommuner i 2024-inndelingen. Folkemengde "
-        f"1.1.{vekst['aar_start'][0]} målt mot 1.1.{vekst['aar_slutt'][0]}.",
-        "",
-        "## Funn",
-        "",
-        f"- Norge vokste fra {_antall(start)} til {_antall(slutt)} innbyggere, "
-        f"{_antall(slutt - start)} personer eller {_pst(landsvekst)}.",
-        f"- Veksten er flytting, ikke fødsler: av de {_antall(slutt - start)} nye innbyggerne "
-        f"kommer {_antall(flytting)} fra nettoinnflytting og {_antall(fodsel)} fra "
-        f"fødselsoverskudd — {flytting / (slutt - start) * 100:.0f} mot "
-        f"{fodsel / (slutt - start) * 100:.0f} prosent. De siste "
-        f"{_antall(slutt - start - flytting - fodsel)} er restleddet SSB ikke fordeler.",
-        f"- Fødselsoverskuddet er negativt i {neg_fodsel} av {sml.height} sammenlignbare kommuner. "
-        f"I {baaret_av_flytting} kommuner er nettoinnflyttingen alene større enn hele veksten — "
-        "de vokser altså *på tross av* at det dør flere enn det fødes.",
-        f"- Veksten er skjevt fordelt: {under_snitt} av {sml.height} kommuner vokste saktere enn "
-        f"landet, og {nedgang} hadde direkte nedgang.",
-        f"- Sterkest vekst: **{topp['kommune']}** ({kort_navn(topp['fylke'])}), "
-        f"{_pst(topp['vekst_pst'])} — men fra {_antall(topp['folkemengde_start'])} innbyggere. "
-        f"Svakest: **{bunn['kommune']}** ({kort_navn(bunn['fylke'])}), {_pst(bunn['vekst_pst'])}.",
-        f"- Fylkesvis spenner det fra {_pst(fylke['vekst_pst'].max())} i "
-        f"{kort_navn(fylke.row(0, named=True)['fylke'])} til "
-        f"{_pst(fylke['vekst_pst'].min())} i "
-        f"{kort_navn(fylke.row(-1, named=True)['fylke'])}.",
-        "",
-        "## Fylker",
-        "",
-        f"| Fylke | Kommuner | 1.1.{vekst['aar_start'][0]} | 1.1.{vekst['aar_slutt'][0]} "
-        "| Vekst | Herav flytting |",
-        "|---|--:|--:|--:|--:|--:|",
-    ]
-    for rad in fylke.iter_rows(named=True):
-        lines.append(
-            f"| {kort_navn(rad['fylke'])} | {rad['kommuner']} | "
-            f"{_antall(rad['folkemengde_start'])} | {_antall(rad['folkemengde_slutt'])} | "
-            f"{_pst(rad['vekst_pst'])} | {_antall(rad['nettoinnflytting_sum'])} |"
-        )
+    aar_start = int(vekst["aar_start"][0])
+    aar_slutt = int(vekst["aar_slutt"][0])
+    utenfor_kilde = (
+        f"Kilde: SSB tabell {TABELL}. Kommuner med grenseendring over "
+        f"{_pst(TOLERANSE).lstrip('+')} av folketallet er holdt utenfor."
+    )
 
-    lines += [
-        "",
-        "## Metode",
-        "",
-        f"- Kilde: SSB tabell {TABELL}, «{proveniens['label']}». "
-        f"SSB oppdaterte tabellen {proveniens['updated'][:10]}; "
-        f"hentet {proveniens['fetched_at'][:19]}Z, sha256 {proveniens['sha256'][:12]}…",
-        f"- Modellene `{MODEL_AAR}`, `{MODEL_FYLKE}` og `{MODEL_VEKST}`, bygget av statman "
-        f"{proveniens['bygget'][:19].replace('T', ' ')}Z. Råversjonen over er den "
-        "byggeloggen oppgir, ikke den som tilfeldigvis er nyest nå.",
-        "- Kommuneinndeling: SSBs kodeliste `agg_KommSummerHist` («Kommuner 2024, "
-        "sammenslåtte tidsserier»). Den summerer historikken til sammenslåtte kommuner "
-        "opp til dagens grenser, så kommunereformene i 2018 og 2020 gir ikke seriebrudd. "
-        "Fylkestallene bruker `agg_KommFylkerHist`, som gjør det samme for fylker — "
-        "ikke `agg_Fylker2024`, som bare har tallene for fylkene slik de faktisk het "
-        "det året og summerer seg til 1,5 millioner i 2011.",
-        "- Kodelista reverserer derimot ikke *delinger*, og fanger ikke grensejusteringer. "
-        "Vi finner dem i stedet i tallene: der endringen i folkemengde ikke er lik "
-        "folketilveksten SSB oppgir, har grensene flyttet seg. Differansen ligger i "
-        "kolonnen `grenseavvik`.",
-        f"- Vi krever ikke at avviket er null, men at det største enkeltavviket er under "
-        f"{_pst(TOLERANSE).lstrip('+')} av folketallet. Uten en toleranse ville en "
-        "grensejustering på 29 personer kastet Drammen ut av statistikken. Kommuner over "
-        "terskelen er merket `sammenlignbar = false` og holdt utenfor rangering og "
-        "topplister; de nøyaktige avvikene står i `grenseavvik_sum` og "
-        "`grenseavvik_maks_pst` for alle kommuner.",
-        f"- Det ga {utelatt.height} utelatte kommuner av {alle.height}.",
-        f"- Kontroll: for de {komplett.height} kommunene som har folketall hele perioden, "
-        f"summerer grenseavvikene seg til {_fortegn(komplett['grenseavvik_sum'].sum())} "
-        "personer. Grensejusteringer flytter folk mellom kommuner, så summen skal være "
-        f"null. De resterende {_antall(mangler['grenseavvik_sum'].sum())} tilhører de "
-        f"{mangler.height} kommunene som ble dannet av delte kommuner i 2020, og er de "
-        "samme personene som mangler i kommunetabellen før det året.",
-        "",
-        "| Kommune | Fylke | Grenseavvik | Største enkeltavvik | Hva som skjedde |",
-        "|---|---|--:|--:|---|",
-    ]
-    for rad in utelatt.iter_rows(named=True):
-        # Kommuner uten folketall å dele på har ingen relativ andel å vise.
-        andel = (
-            f"{rad['grenseavvik_maks_pst'] * 100:.1f} %".replace(".", ",")
-            if rad["grenseavvik_maks_pst"]
-            else "—"
-        )
-        lines.append(
-            f"| {rad['kommune']} | {kort_navn(rad['fylke'])} | "
-            f"{_fortegn(rad['grenseavvik_sum'])} | {andel} | {_forklaring(rad)} |"
-        )
+    funn = publish.Section(
+        "Funn",
+        (
+            publish.Stats(
+                (
+                    publish.Stat(
+                        _antall(slutt - start), "Flere innbyggere", f"{periode}"
+                    ),
+                    publish.Stat(_pst(landsvekst), "Vekst i Norge", "over perioden"),
+                    publish.Stat(
+                        f"{flytting / (slutt - start) * 100:.0f} %",
+                        "Av veksten er flytting",
+                        f"{fodsel / (slutt - start) * 100:.0f} % er fødselsoverskudd",
+                    ),
+                    publish.Stat(
+                        str(nedgang),
+                        "Kommuner med nedgang",
+                        f"av {sml.height} sammenlignbare",
+                    ),
+                )
+            ),
+            publish.Findings(
+                (
+                    f"Norge vokste fra {_antall(start)} til {_antall(slutt)} innbyggere, "
+                    f"{_antall(slutt - start)} personer eller {_pst(landsvekst)}.",
+                    f"Veksten er flytting, ikke fødsler: av de {_antall(slutt - start)} "
+                    f"nye innbyggerne kommer {_antall(flytting)} fra nettoinnflytting og "
+                    f"{_antall(fodsel)} fra fødselsoverskudd — "
+                    f"{flytting / (slutt - start) * 100:.0f} mot "
+                    f"{fodsel / (slutt - start) * 100:.0f} prosent. De siste "
+                    f"{_antall(slutt - start - flytting - fodsel)} er restleddet SSB "
+                    "ikke fordeler.",
+                    f"Fødselsoverskuddet er negativt i {neg_fodsel} av {sml.height} "
+                    f"sammenlignbare kommuner. I {baaret_av_flytting} kommuner er "
+                    "nettoinnflyttingen alene større enn hele veksten — de vokser altså "
+                    "*på tross av* at det dør flere enn det fødes.",
+                    f"Veksten er skjevt fordelt: {under_snitt} av {sml.height} kommuner "
+                    f"vokste saktere enn landet, og {nedgang} hadde direkte nedgang.",
+                    f"Sterkest vekst: **{topp['kommune']}** ({kort_navn(topp['fylke'])}), "
+                    f"{_pst(topp['vekst_pst'])} — men fra "
+                    f"{_antall(topp['folkemengde_start'])} innbyggere. Svakest: "
+                    f"**{bunn['kommune']}** ({kort_navn(bunn['fylke'])}), "
+                    f"{_pst(bunn['vekst_pst'])}.",
+                    f"Fylkesvis spenner det fra {_pst(fylke['vekst_pst'].max())} i "
+                    f"{kort_navn(fylke.row(0, named=True)['fylke'])} til "
+                    f"{_pst(fylke['vekst_pst'].min())} i "
+                    f"{kort_navn(fylke.row(-1, named=True)['fylke'])}.",
+                )
+            ),
+            publish.Figure(
+                "vekst_topp_bunn.png",
+                alt=f"To liggende søylediagram: de {N_TOPP} kommunene med størst vekst "
+                f"og de {N_TOPP} med størst nedgang, i prosent.",
+                caption="Prosentvekst rangerer små kommuner til topps og til bunns. "
+                "Folketallet står ved siden av hver søyle, fordi 27 prosent i en "
+                "kommune med 1 257 innbyggere er noe annet enn 27 prosent i Oslo.",
+                source=utenfor_kilde,
+                width="full",
+            ),
+            publish.Figure(
+                "komponenter.png",
+                alt="Punktdiagram: fødselsoverskudd langs x-aksen, nettoinnflytting "
+                "langs y-aksen, én prikk per kommune.",
+                caption="Den stiplede diagonalen er nullvekst. At skyen ligger langt "
+                "mer spredt loddrett enn vannrett, er det samme funnet som i punktet "
+                "over — sett fra siden.",
+                source=utenfor_kilde,
+            ),
+        ),
+    )
 
-    lines += [
-        "",
-        f"- **{_antall(ufordelt)} personer mangler i kommunetabellen i "
-        f"{vekst['aar_start'][0]}.** Kommuner som ble *delt* i 2020 — Tysfjord og "
-        "Snillfjord — har en historikk som ikke lar seg tilordne én kommune i dagens "
-        "inndeling. SSB legger den i samlekategorien «Delte kommuner og uoppgitt», som "
-        "ikke er noen kommune og derfor ikke er med her. Summen av de 357 kommunene er "
-        f"altså {_antall(ufordelt)} lavere enn Norges folketall til og med 2019, og null "
-        "lavere fra 2020. Landstallene og fylkestabellen i dette notatet er hentet fra "
-        "fylkesserien, som har dem med.",
-        "- Ingen justering for at kommuner er ulike i størrelse. Prosentvekst og "
-        "absolutt vekst gir to forskjellige topplister; CSV-en har begge.",
-        "",
-        "## Forbehold",
-        "",
-    ]
-    for key in METRICS:
-        lines.append(catalog.metric(key).note())
-        lines.append("")
+    fylker = publish.Section(
+        "Fylker",
+        (
+            publish.Table(
+                columns=(
+                    "Fylke",
+                    "Kommuner",
+                    f"1.1.{aar_start}",
+                    f"1.1.{aar_slutt}",
+                    "Vekst",
+                    "Herav flytting",
+                ),
+                align=("left", "right", "right", "right", "right", "right"),
+                rows=tuple(
+                    (
+                        kort_navn(rad["fylke"]),
+                        str(rad["kommuner"]),
+                        _antall(rad["folkemengde_start"]),
+                        _antall(rad["folkemengde_slutt"]),
+                        _pst(rad["vekst_pst"]),
+                        _antall(rad["nettoinnflytting_sum"]),
+                    )
+                    for rad in fylke.iter_rows(named=True)
+                ),
+                caption="Klikk på en kolonneoverskrift for å sortere.",
+            ),
+            publish.Figure(
+                "fylke.png",
+                alt="Liggende søyler per fylke, delt i nettoinnflytting og "
+                "fødselsoverskudd.",
+                caption="Samme tabell som graf, med veksten delt i de to komponentene.",
+                source="Kilde: SSB tabell 06913, fylkesserien. Sorte punkter er samlet "
+                "vekst; avviket fra søylene er restleddet SSB ikke fordeler.",
+            ),
+        ),
+    )
 
-    lines += [
-        "## Filer",
-        "",
-        "- `befolkningsvekst_kommune.csv` — alle kommuner, alle kolonner.",
-        "- `vekst_topp_bunn.png` — topp og bunn på prosentvekst.",
-        "- `aarlig_utvikling.png` — årlig rate per kommune, tre paneler med felles akse.",
-        "- `aarlig_ekstremer.png` — de fem høyeste og laveste per komponent, navngitt.",
-        "- `komponenter.png` — fødselsoverskudd mot nettoinnflytting.",
-        "- `fylke.png` — fylkesvis vekst delt i komponenter.",
-    ]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return path
+    aar_for_aar = publish.Section(
+        "År for år",
+        (
+            publish.Figure(
+                "aarlig_utvikling.png",
+                alt="Tre paneler med én tynn grå linje per kommune, median og "
+                "persentilbånd lagt over.",
+                caption="Samlet tilvekst, nettoinnflytting og fødselsoverskudd, år for "
+                "år. Panelene deler y-akse med vilje: fødselsoverskuddet holder seg "
+                "innenfor et par prosent i alle kommuner alle år, mens flyttingen "
+                "spriker. Med hver sin akse ville de sett like ut.",
+                source="Kilde: SSB tabell 06913. «Hele landet» er summen av endringene "
+                "delt på samlet folketall, ikke medianen av kommunene.",
+                width="full",
+            ),
+            publish.Figure(
+                "aarlig_ekstremer.png",
+                alt="Samme tre komponenter, men bare de fem høyeste og fem laveste "
+                "kommunene, navngitt.",
+                caption=f"Spaghettigrafen over viser fordelingen og skjuler kommunene; "
+                f"denne gjør det motsatte. Utvalget er de {N_EKSTREM} høyeste og laveste "
+                "på kumulativ rate over hele perioden, ikke på enkeltår.",
+                source="Kilde: SSB tabell 06913. Hvert panel har sin egen y-akse. Bare "
+                "sammenlignbare kommuner.",
+                width="full",
+            ),
+        ),
+    )
+
+    metode = publish.Section(
+        "Metode",
+        (
+            publish.Findings(
+                (
+                    f"Kilde: SSB tabell {TABELL}, «{proveniens['label']}». "
+                    f"SSB oppdaterte tabellen {proveniens['updated'][:10]}; "
+                    f"hentet {proveniens['fetched_at'][:19]}Z, "
+                    f"sha256 {proveniens['sha256'][:12]}…",
+                    f"Modellene `{MODEL_AAR}`, `{MODEL_FYLKE}` og `{MODEL_VEKST}`, "
+                    f"bygget av statman {proveniens['bygget'][:19].replace('T', ' ')}Z. "
+                    "Råversjonen over er den byggeloggen oppgir, ikke den som "
+                    "tilfeldigvis er nyest nå.",
+                    "Kommuneinndeling: SSBs kodeliste `agg_KommSummerHist` («Kommuner "
+                    "2024, sammenslåtte tidsserier»). Den summerer historikken til "
+                    "sammenslåtte kommuner opp til dagens grenser, så kommunereformene "
+                    "i 2018 og 2020 gir ikke seriebrudd. Fylkestallene bruker "
+                    "`agg_KommFylkerHist`, som gjør det samme for fylker — ikke "
+                    "`agg_Fylker2024`, som bare har tallene for fylkene slik de faktisk "
+                    "het det året og summerer seg til 1,5 millioner i 2011.",
+                    "Kodelista reverserer derimot ikke *delinger*, og fanger ikke "
+                    "grensejusteringer. Vi finner dem i stedet i tallene: der endringen "
+                    "i folkemengde ikke er lik folketilveksten SSB oppgir, har grensene "
+                    "flyttet seg. Differansen ligger i kolonnen `grenseavvik`.",
+                    "Vi krever ikke at avviket er null, men at det største enkeltavviket "
+                    f"er under {_pst(TOLERANSE).lstrip('+')} av folketallet. Uten en "
+                    "toleranse ville en grensejustering på 29 personer kastet Drammen ut "
+                    "av statistikken. Kommuner over terskelen er merket "
+                    "`sammenlignbar = false` og holdt utenfor rangering og topplister; "
+                    "de nøyaktige avvikene står i `grenseavvik_sum` og "
+                    "`grenseavvik_maks_pst` for alle kommuner.",
+                    f"Det ga {utelatt.height} utelatte kommuner av {alle.height}.",
+                    f"Kontroll: for de {komplett.height} kommunene som har folketall "
+                    "hele perioden, summerer grenseavvikene seg til "
+                    f"{_fortegn(komplett['grenseavvik_sum'].sum())} personer. "
+                    "Grensejusteringer flytter folk mellom kommuner, så summen skal "
+                    f"være null. De resterende "
+                    f"{_antall(mangler['grenseavvik_sum'].sum())} tilhører de "
+                    f"{mangler.height} kommunene som ble dannet av delte kommuner i "
+                    "2020, og er de samme personene som mangler i kommunetabellen før "
+                    "det året.",
+                )
+            ),
+            publish.Table(
+                columns=(
+                    "Kommune",
+                    "Fylke",
+                    "Grenseavvik",
+                    "Største enkeltavvik",
+                    "Hva som skjedde",
+                ),
+                align=("left", "left", "right", "right", "left"),
+                rows=tuple(
+                    (
+                        rad["kommune"],
+                        kort_navn(rad["fylke"]),
+                        _fortegn(rad["grenseavvik_sum"]),
+                        # Kommuner uten folketall å dele på har ingen andel å vise.
+                        f"{rad['grenseavvik_maks_pst'] * 100:.1f} %".replace(".", ",")
+                        if rad["grenseavvik_maks_pst"]
+                        else "—",
+                        _forklaring(rad),
+                    )
+                    for rad in utelatt.iter_rows(named=True)
+                ),
+                caption=f"De {utelatt.height} kommunene som er holdt utenfor "
+                "rangeringen, og hvorfor.",
+            ),
+            publish.Findings(
+                (
+                    f"**{_antall(ufordelt)} personer mangler i kommunetabellen i "
+                    f"{aar_start}.** Kommuner som ble *delt* i 2020 — Tysfjord og "
+                    "Snillfjord — har en historikk som ikke lar seg tilordne én kommune "
+                    "i dagens inndeling. SSB legger den i samlekategorien «Delte "
+                    "kommuner og uoppgitt», som ikke er noen kommune og derfor ikke er "
+                    f"med her. Summen av de {alle.height} kommunene er altså "
+                    f"{_antall(ufordelt)} lavere enn Norges folketall til og med 2019, "
+                    "og null lavere fra 2020. Landstallene og fylkestabellen her er "
+                    "hentet fra fylkesserien, som har dem med.",
+                    "Ingen justering for at kommuner er ulike i størrelse. Prosentvekst "
+                    "og absolutt vekst gir to forskjellige topplister; CSV-en har begge.",
+                )
+            ),
+        ),
+    )
+
+    return publish.Article(
+        slug=SLUG,
+        kicker=f"Befolkning · SSB tabell {TABELL}",
+        title=f"Befolkningsvekst i norske kommuner, {periode}",
+        lead=(
+            f"Alle {alle.height} kommuner i 2024-inndelingen. Folkemengde "
+            f"1.1.{aar_start} målt mot 1.1.{aar_slutt}. Det egentlige arbeidet i denne "
+            "saken er ikke å regne ut prosentvekst, men å vite hvilke kommuner man "
+            "*ikke* kan regne prosentvekst for."
+        ),
+        published=proveniens["bygget"][:10],
+        sections=(funn, fylker, aar_for_aar, metode),
+        caveats=METRICS,
+        provenance={
+            "Kilde": f"SSB tabell {TABELL} — {proveniens['label']}",
+            "Oppdatert": proveniens["updated"][:10],
+            "Hentet": proveniens["fetched_at"][:19] + "Z",
+            "sha256": proveniens["sha256"],
+            "Kodeliste": "agg_KommSummerHist · agg_KommFylkerHist",
+            "Modeller": f"{MODEL_AAR} · {MODEL_FYLKE} · {MODEL_VEKST}",
+            "Bygget": proveniens["bygget"][:19].replace("T", " ") + "Z",
+        },
+        files=(
+            (f"{SLUG}.csv", "alle kommuner, alle kolonner"),
+            ("vekst_topp_bunn.png", "topp og bunn på prosentvekst"),
+            ("aarlig_utvikling.png", "årlig rate per kommune, tre paneler med felles akse"),
+            ("aarlig_ekstremer.png", "de fem høyeste og laveste per komponent, navngitt"),
+            ("komponenter.png", "fødselsoverskudd mot nettoinnflytting"),
+            ("fylke.png", "fylkesvis vekst delt i komponenter"),
+        ),
+    )
 
 
 # Hva som faktisk skjedde, for de tilfellene som er verdt å navngi. Resten
@@ -853,17 +998,24 @@ def main() -> list[Path]:
     target = io.output_dir() / SLUG
     target.mkdir(parents=True, exist_ok=True)
 
-    csv_path = target / "befolkningsvekst_kommune.csv"
+    csv_path = target / f"{SLUG}.csv"
     vekst.sort("vekst_pst", descending=True, nulls_last=True).write_csv(csv_path)
 
-    return [
-        csv_path,
+    figurer = [
         _plot_topp_bunn(sml, target / "vekst_topp_bunn.png", periode, aar_slutt),
         _plot_aarlig(aar_df, target / "aarlig_utvikling.png", periode),
         _plot_ekstremer(aar_df, vekst, target / "aarlig_ekstremer.png", periode),
         _plot_komponenter(sml, target / "komponenter.png", periode),
         _plot_fylke(fylke, target / "fylke.png", periode, aar_start),
-        _notat(vekst, fylke, target / "notat.md", periode, proveniens),
+    ]
+
+    art = artikkel(vekst, fylke, periode, proveniens)
+    art.validate(target)
+    return [
+        csv_path,
+        *figurer,
+        publish.markdown.write(art, target / "notat.md"),
+        art.write(target),
     ]
 
 

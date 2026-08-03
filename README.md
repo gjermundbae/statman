@@ -26,6 +26,8 @@ Skript utenfor pakka fungerer også, siden `pyproject.toml` setter
 | `statman build [navn ...]` | bygger modeller og alt oppstrøms |
 | `statman metrics` | viser metrikkatalogen |
 | `statman example [navn]` | ingest → build → sakspakke i `output/` |
+| `statman publish [slug ...]` | sakspakke → artikkel i `docs/`. Tomt = alle klare |
+| `statman published` | hva som er publisert, og hva som står klart |
 | `statman ingest-synthetic` | genererer det syntetiske datasettet |
 | `statman ingest-ssb 03013 -c Tid=TOP(12)` | henter en SSB-tabell |
 | `statman ingest-ssb 06913 -l Region=agg_KommSummerHist --dataset 06913_kommune` | samme, med aggregert kodeliste |
@@ -48,11 +50,13 @@ statman/
   cli.py
   sources/               én modul per kilde: hent, skriv ned uendret
   models/                transformasjonene
+  publish/               sakspakke -> artikkel: Article, markdown, html, site
 catalog/metrics.yml      definisjoner, enheter, forbehold
 examples/                ende-til-ende-eksempler
 tests/
 data/                    gitignorert: raw/ clean/ mart/ + byggelogger
 output/                  gitignorert: sakspakker
+docs/                    publiserte artikler — det eneste genererte som er i git
 ```
 
 ## Eksemplene
@@ -83,6 +87,70 @@ print(m.note())                          # definisjon + forbehold
 
 io.read_manifest("mart.befolkningsvekst")["raw"]   # hvilken henting ga tallene
 ```
+
+## Publisering
+
+En sakspakke i `output/` er arbeidsformen. Når du er fornøyd med den, blir den
+en artikkel:
+
+```bash
+statman publish befolkningsvekst_kommune
+```
+
+Det skriver `docs/<slug>/index.html` — én selvstendig side med grafene,
+tabellene, metoden, forbeholdene og en kvittering nederst som sporer tallene
+tilbake til hentingen som ga dem — og bygger arkivsida `docs/index.html` på
+nytt. Ingenting regnes ut på veien; tallene er de som lå i sakspakken.
+
+Slå på GitHub Pages én gang: *Settings → Pages → Deploy from a branch →
+`master` / `docs`*. Etter det er publisering en `git push`.
+
+`docs/CNAME` holder det egne domenet. `statman publish` skriver bare
+`index.html`, `.nojekyll` og én mappe per sak, og sletter aldri noe i `docs/` —
+så fila blir stående. Forsvinner den, faller sida tilbake til
+`gjermundbae.github.io/statman`.
+
+Se sida lokalt før du pusher:
+
+```bash
+python -m http.server 8765 --directory docs
+```
+
+### Å publisere en analyse som ikke er et eksempel
+
+`statman publish` leser `artikkel.json` fra sakspakken og importerer aldri
+koden som lagde tallene. En notebook som skriver fila kan publiseres likt:
+
+```python
+from statman import io, publish
+
+art = publish.Article(
+    slug="min_sak",
+    kicker="Kraftpris · SSB tabell 09364",
+    title="…",
+    lead="…",
+    published="2026-08-03",
+    sections=(
+        publish.Section("Funn", (
+            publish.Stats((publish.Stat("+14,4 %", "Vekst", "over perioden"),)),
+            publish.Findings(("Et **funn**.",)),
+            publish.Figure("graf.png", alt="…", caption="…", width="full"),
+        )),
+    ),
+    caveats=("folkevekst_pst",),        # nøkler inn i catalog/metrics.yml
+    provenance={"Hentet": "…", "sha256": "…"},
+    files=(("data.csv", "alle rader"),),
+)
+
+pakke = io.output_dir() / art.slug
+art.validate(pakke)                      # feiler på ukjent forbehold, manglende figur
+publish.markdown.write(art, pakke / "notat.md")
+art.write(pakke)
+```
+
+Forbehold oppgis som *nøkler*, aldri som tekst. Skriver du dem av for hånd, har
+du laget en kopi som forvitrer — og `validate()` sier fra hvis nøkkelen ikke
+finnes.
 
 ## Å legge til en kilde
 

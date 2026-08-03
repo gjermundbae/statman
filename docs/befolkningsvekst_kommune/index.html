@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Befolkningsvekst i norske kommuner, 2011–2025</title>
+<meta name="description" content="Alle 357 kommuner i 2024-inndelingen. Folkemengde 1.1.2011 målt mot 1.1.2026. Det egentlige arbeidet i denne saken er ikke å regne ut prosentvekst, men å vite hvilke kommuner man *ikke* kan regne prosentvekst for.">
+<meta name="generator" content="statman">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%231f6f4a'/%3E%3Crect%20x='8'%20y='17'%20width='4'%20height='8'%20fill='%23fbfaf7'/%3E%3Crect%20x='14'%20y='11'%20width='4'%20height='14'%20fill='%23fbfaf7'/%3E%3Crect%20x='20'%20y='7'%20width='4'%20height='18'%20fill='%23fbfaf7'/%3E%3C/svg%3E">
+<style>
+/* Statman — publiseringslaget.
+   Redaksjonelt og stramt. Ett tekstspenn, én aksentfarge, mye luft.
+   Lekenheten ligger i det som ikke er nødvendig for å lese: kvitteringen,
+   nøkkeltallene som teller opp, figurene som glir inn. Aldri i noe som
+   flytter på et tall eller skjuler et forbehold. */
+
+:root {
+  color-scheme: light dark;
+
+  --papir: #fbfaf7;
+  --flate: #ffffff;
+  --blekk: #16150f;
+  --dempet: #6d675e;
+  --svak: #97918a;
+  --strek: #e6e1d8;
+  --strek-mork: #d2ccc0;
+  --aksent: #1f6f4a;
+  --aksent-flate: #eaf3ee;
+  --fall: #a33b32;
+  --skygge: 0 1px 2px rgb(22 21 15 / 0.04), 0 8px 24px -12px rgb(22 21 15 / 0.16);
+
+  --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --spenn: 37rem;
+  --kant: 1.5rem;
+  --runding: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --papir: #100f0d;
+    --flate: #191814;
+    --blekk: #eae6dd;
+    --dempet: #9d968a;
+    --svak: #7a7368;
+    --strek: #2b2924;
+    --strek-mork: #3a3730;
+    --aksent: #6cc294;
+    --aksent-flate: #16241d;
+    --fall: #e08a80;
+    --skygge: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.7);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--papir);
+  color: var(--blekk);
+  font-family: var(--sans);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--aksent); color: var(--papir); }
+
+a { color: inherit; text-decoration-color: var(--strek-mork); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--aksent); }
+
+/* -------------------------------------------------------------- rammeverk */
+.fremdrift {
+  position: fixed; inset: 0 auto auto 0;
+  height: 2px; width: 0;
+  background: var(--aksent);
+  z-index: 9;
+  transition: width 80ms linear;
+}
+@media print { .fremdrift { display: none; } }
+
+.ark {
+  display: grid;
+  grid-template-columns:
+    [full-start] minmax(var(--kant), 1fr)
+    [wide-start] minmax(0, 9rem)
+    [text-start] min(var(--spenn), 100% - var(--kant) * 2) [text-end]
+    minmax(0, 9rem) [wide-end]
+    minmax(var(--kant), 1fr) [full-end];
+  padding-bottom: 5rem;
+  counter-reset: seksjon;
+}
+.ark > * { grid-column: text; }
+
+/* Seksjonene arver kolonnene fra arket, så en figur eller en tabell inne i
+   en seksjon kan bryte ut av tekstspennet. Uten subgrid ville hver seksjon
+   vært en boks som klemte alt inn i teksten igjen. Faller pent tilbake:
+   uten støtte blir alt stående i tekstspennet. */
+@supports (grid-template-columns: subgrid) {
+  .ark > section {
+    grid-column: full;
+    display: grid;
+    grid-template-columns: subgrid;
+  }
+  .ark > section > * { grid-column: text; }
+  .ark > section > .noekkeltall,
+  .ark > section > .tabell-hylse,
+  .ark > section > .figur.bred { grid-column: wide; }
+  .ark > section > .figur.full { grid-column: full; }
+}
+
+/* ------------------------------------------------------------------- topp */
+.merke {
+  grid-column: full;
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 1.1rem var(--kant);
+  font: 600 0.75rem/1 var(--sans);
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--dempet);
+  border-bottom: 1px solid var(--strek);
+  margin-bottom: 4rem;
+}
+.merke a { text-decoration: none; }
+.merke a:hover { color: var(--aksent); }
+.merke .frø {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--aksent);
+  box-shadow: 0 0 0 0 color-mix(in oklab, var(--aksent) 55%, transparent);
+  animation: puls 3.2s ease-out infinite;
+}
+@keyframes puls {
+  0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--aksent) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 9px color-mix(in oklab, var(--aksent) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--aksent) 0%, transparent); }
+}
+
+.stikk {
+  margin: 0 0 1rem;
+  font: 600 0.78rem/1.4 var(--sans);
+  letter-spacing: 0.13em; text-transform: uppercase;
+  color: var(--aksent);
+}
+
+h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(2.3rem, 1.3rem + 3.6vw, 3.9rem);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.ingress {
+  margin: 1.4rem 0 0;
+  font-family: var(--serif);
+  font-size: clamp(1.15rem, 1rem + 0.6vw, 1.4rem);
+  line-height: 1.5;
+  color: var(--dempet);
+  text-wrap: pretty;
+}
+
+.datolinje {
+  margin: 1.6rem 0 0;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--strek);
+  font-size: 0.83rem;
+  color: var(--svak);
+  letter-spacing: 0.02em;
+}
+
+/* --------------------------------------------------------------- seksjoner */
+section { margin-top: 3.5rem; }
+section:first-of-type { margin-top: 3rem; }
+
+h2 {
+  counter-increment: seksjon;
+  display: flex; align-items: baseline; gap: 0.75rem;
+  margin: 0 0 1.4rem;
+  font-family: var(--serif);
+  font-size: clamp(1.5rem, 1.2rem + 1vw, 1.95rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  scroll-margin-top: 2rem;
+}
+h2::before {
+  content: counter(seksjon, decimal-leading-zero);
+  flex: none;
+  font: 600 0.72rem/1.9 var(--sans);
+  letter-spacing: 0.1em;
+  color: var(--aksent);
+  border-bottom: 2px solid var(--aksent);
+}
+
+p { margin: 0 0 1.1rem; text-wrap: pretty; }
+strong { font-weight: 650; }
+code {
+  font-family: var(--mono);
+  font-size: 0.87em;
+  background: var(--aksent-flate);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+/* --------------------------------------------------------------- funnliste */
+.funn { margin: 0 0 1.4rem; padding: 0; list-style: none; }
+.funn li {
+  position: relative;
+  padding: 0 0 0 1.5rem;
+  margin-bottom: 0.85rem;
+}
+.funn li::before {
+  content: "";
+  position: absolute; left: 0; top: 0.62em;
+  width: 7px; height: 7px;
+  border-radius: 2px;
+  background: var(--aksent);
+  transform: rotate(45deg);
+  transition: transform 220ms ease;
+}
+.funn li:hover::before { transform: rotate(135deg) scale(1.15); }
+
+/* -------------------------------------------------------------- nøkkeltall */
+.noekkeltall {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  margin: 2.2rem 0;
+  background: var(--flate);
+  border: 1px solid var(--strek);
+  border-radius: var(--runding);
+  overflow: hidden;
+}
+/* Skillelinjene ligger på cellene, ikke i mellomrommet mellom dem. Det
+   koster negative marginer, men et rutenett som ikke går opp får da tomrom
+   i kortfargen i stedet for en grå flekk. */
+.noekkeltall div {
+  padding: 1.15rem 1.25rem;
+  margin: 0 -1px -1px 0;
+  border-right: 1px solid var(--strek);
+  border-bottom: 1px solid var(--strek);
+}
+.noekkeltall .tall {
+  display: block;
+  font-family: var(--serif);
+  font-size: clamp(1.7rem, 1.4rem + 1.2vw, 2.3rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.noekkeltall .etikett {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dempet);
+}
+.noekkeltall .merknad {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--svak);
+}
+
+/* ------------------------------------------------------------------ figurer */
+.figur { margin: 2.6rem 0; }
+.figur.full { max-width: 72rem; margin-inline: auto; }
+.figur a { display: block; text-decoration: none; }
+.figur img {
+  display: block; width: 100%; height: auto;
+  border: 1px solid var(--strek);
+  border-radius: var(--runding);
+  background: #fff;
+  box-shadow: var(--skygge);
+  transition: transform 260ms cubic-bezier(.2,.7,.3,1), box-shadow 260ms ease;
+}
+.figur a:hover img { transform: translateY(-3px); box-shadow: 0 1px 2px rgb(22 21 15 / .05), 0 20px 44px -20px rgb(22 21 15 / .3); }
+.figur figcaption {
+  margin-top: 0.85rem;
+  font-size: 0.87rem;
+  line-height: 1.55;
+  color: var(--dempet);
+  max-width: var(--spenn);
+}
+.figur .kilde { display: block; margin-top: 0.25rem; color: var(--svak); font-size: 0.8rem; }
+
+/* Glir inn ved scroll. Slås av av .rolig, som JS setter når brukeren har
+   bedt om mindre bevegelse. */
+body:not(.rolig) .avslor {
+  opacity: 0;
+  transform: translateY(14px);
+}
+body:not(.rolig) .avslor.synlig {
+  opacity: 1;
+  transform: none;
+  transition: opacity 620ms ease, transform 620ms cubic-bezier(.2,.7,.3,1);
+}
+
+/* ------------------------------------------------------------------ tabeller */
+.tabell-hylse {
+  margin: 2.2rem 0;
+  overflow-x: auto;
+  border: 1px solid var(--strek);
+  border-radius: var(--runding);
+  background: var(--flate);
+}
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+thead th {
+  position: sticky; top: 0;
+  background: var(--flate);
+  border-bottom: 1px solid var(--strek-mork);
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.76rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--dempet);
+  white-space: nowrap;
+}
+th.h {
+  cursor: pointer;
+  user-select: none;
+  transition: color 160ms ease;
+}
+th.h:hover { color: var(--aksent); }
+th.h::after {
+  content: "↕";
+  margin-left: 0.4em;
+  opacity: 0.28;
+  font-size: 0.9em;
+}
+th.h[data-vei="opp"]::after   { content: "↑"; opacity: 1; color: var(--aksent); }
+th.h[data-vei="ned"]::after   { content: "↓"; opacity: 1; color: var(--aksent); }
+tbody td {
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--strek);
+  font-variant-numeric: tabular-nums;
+}
+tbody tr { transition: background 140ms ease; }
+tbody tr:hover { background: var(--aksent-flate); }
+td.right, th.right { text-align: right; }
+.tabell-tekst { margin: -1.4rem 0 2.2rem; font-size: 0.85rem; color: var(--svak); }
+
+/* ----------------------------------------------------------------- forbehold */
+.forbehold h2::before { color: var(--fall); border-color: var(--fall); }
+.forbehold p.hvorfor { color: var(--dempet); font-size: 0.95rem; }
+details {
+  border-top: 1px solid var(--strek);
+  padding: 0.15rem 0;
+}
+details:last-of-type { border-bottom: 1px solid var(--strek); }
+summary {
+  display: flex; align-items: baseline; gap: 0.7rem;
+  padding: 0.9rem 0;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  font-size: 0.98rem;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: "+";
+  flex: none;
+  width: 1.1rem;
+  font: 400 1.1rem/1 var(--mono);
+  color: var(--aksent);
+  transition: transform 220ms cubic-bezier(.2,.7,.3,1);
+}
+details[open] summary::before { transform: rotate(45deg); }
+summary .enhet { font-weight: 400; color: var(--svak); font-size: 0.85rem; }
+summary:hover { color: var(--aksent); }
+details ul { margin: 0 0 1.1rem; padding-left: 1.85rem; }
+details li { margin-bottom: 0.5rem; font-size: 0.94rem; color: var(--dempet); }
+details li.brudd::marker { color: var(--fall); }
+details .kilde-linje {
+  margin: 0 0 0.8rem 1.85rem;
+  font-size: 0.82rem;
+  color: var(--svak);
+}
+
+/* --------------------------------------------------------------------- filer */
+.filer { margin: 0; padding: 0; list-style: none; }
+.filer li { border-top: 1px solid var(--strek); }
+.filer li:last-child { border-bottom: 1px solid var(--strek); }
+.filer a {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.9rem;
+  padding: 0.8rem 0.2rem;
+  text-decoration: none;
+  transition: padding-left 200ms cubic-bezier(.2,.7,.3,1), background 160ms ease;
+}
+.filer a:hover { padding-left: 0.7rem; background: var(--aksent-flate); }
+.filer .navn { font-family: var(--mono); font-size: 0.86rem; color: var(--aksent); }
+.filer .om { color: var(--dempet); font-size: 0.9rem; }
+
+/* --------------------------------------------------------------- kvitteringen */
+/* Proveniensen satt som en kassalapp. Den er der fordi det er det systemet
+   gjør best: et publisert tall skal kunne spores tilbake til hentingen som
+   ga det, også av noen som bare har denne sida. */
+.kvittering {
+  --pad: 1.5rem;
+  position: relative;
+  margin: 4.5rem 0 0;
+  padding: var(--pad);
+  background: var(--flate);
+  border: 1px solid var(--strek);
+  border-bottom: 0;
+  border-radius: var(--runding) var(--runding) 0 0;
+  box-shadow: var(--skygge);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.9;
+  color: var(--dempet);
+}
+.kvittering::after {
+  content: "";
+  position: absolute; left: -1px; right: -1px; bottom: -11px;
+  height: 12px;
+  background: var(--flate);
+  border-inline: 1px solid var(--strek);
+  -webkit-mask: linear-gradient(-45deg, #0000 8px, #000 0) 0 0 / 16px 100% repeat-x;
+          mask: linear-gradient(-45deg, #0000 8px, #000 0) 0 0 / 16px 100% repeat-x;
+}
+.kvittering h2 {
+  display: block;
+  margin: 0 0 1rem;
+  font: 600 0.72rem/1 var(--sans);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--blekk);
+  text-align: center;
+}
+.kvittering h2::before { content: none; }
+.kvittering hr {
+  border: 0;
+  border-top: 1px dashed var(--strek-mork);
+  margin: 0.9rem 0;
+}
+.kvittering dl {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) 1fr;
+  gap: 0.1rem 1.2rem;
+  margin: 0;
+}
+@media (max-width: 32rem) {
+  .kvittering dl { grid-template-columns: 1fr; }
+  .kvittering dt { margin-top: 0.6rem; }
+}
+.kvittering dt { color: var(--svak); white-space: nowrap; }
+.kvittering dd { margin: 0; overflow-wrap: anywhere; color: var(--blekk); }
+.kvittering .bunn { margin: 0.9rem 0 0; text-align: center; color: var(--svak); }
+
+/* ------------------------------------------------------------------- arkivet */
+.arkiv { list-style: none; margin: 2rem 0 0; padding: 0; }
+.arkiv li { border-top: 1px solid var(--strek); }
+.arkiv li:last-child { border-bottom: 1px solid var(--strek); }
+.arkiv a {
+  display: block;
+  padding: 1.9rem 0.2rem;
+  text-decoration: none;
+  transition: padding-left 260ms cubic-bezier(.2,.7,.3,1), background 180ms ease;
+}
+.arkiv a:hover { padding-left: 0.9rem; background: var(--aksent-flate); }
+.arkiv .stikk { margin-bottom: 0.5rem; font-size: 0.7rem; }
+.arkiv h2 {
+  display: block;
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.35rem, 1.15rem + 0.8vw, 1.7rem);
+}
+.arkiv h2::before { content: none; }
+.arkiv p { margin: 0; color: var(--dempet); font-size: 0.96rem; }
+.arkiv time { display: block; margin-top: 0.7rem; font-size: 0.78rem; color: var(--svak); font-variant-numeric: tabular-nums; }
+.tomt { color: var(--svak); font-style: italic; }
+
+/* --------------------------------------------------------------------- print */
+@media print {
+  body { background: #fff; font-size: 10.5pt; }
+  .merke, .fremdrift { display: none; }
+  .figur img { box-shadow: none; }
+  details { break-inside: avoid; }
+  details:not([open]) > *:not(summary) { display: block !important; }
+  .kvittering { box-shadow: none; break-inside: avoid; }
+  a { text-decoration: none; }
+}
+</style>
+</head>
+<body>
+<div class="fremdrift" id="fremdrift"></div>
+<article class="ark"><div class="merke"><span class="frø"></span><a href="../index.html">Statman</a></div><header><p class="stikk">Befolkning · SSB tabell 06913</p><h1>Befolkningsvekst i norske kommuner, 2011–2025</h1><p class="ingress">Alle 357 kommuner i 2024-inndelingen. Folkemengde 1.1.2011 målt mot 1.1.2026. Det egentlige arbeidet i denne saken er ikke å regne ut prosentvekst, men å vite hvilke kommuner man <em>ikke</em> kan regne prosentvekst for.</p><p class="datolinje"><time datetime="2026-08-02">2. august 2026</time></p></header><section id="funn"><h2>Funn</h2><div class="noekkeltall avslor"><div><span class="tall">707 095</span><span class="etikett">Flere innbyggere</span><span class="merknad">2011–2025</span></div><div><span class="tall">+14,4 %</span><span class="etikett">Vekst i Norge</span><span class="merknad">over perioden</span></div><div><span class="tall">69 %</span><span class="etikett">Av veksten er flytting</span><span class="merknad">30 % er fødselsoverskudd</span></div><div><span class="tall">119</span><span class="etikett">Kommuner med nedgang</span><span class="merknad">av 323 sammenlignbare</span></div></div><ul class="funn"><li>Norge vokste fra 4 920 305 til 5 627 400 innbyggere, 707 095 personer eller +14,4 %.</li><li>Veksten er flytting, ikke fødsler: av de 707 095 nye innbyggerne kommer 491 174 fra nettoinnflytting og 214 379 fra fødselsoverskudd — 69 mot 30 prosent. De siste 1 542 er restleddet SSB ikke fordeler.</li><li>Fødselsoverskuddet er negativt i 200 av 323 sammenlignbare kommuner. I 84 kommuner er nettoinnflyttingen alene større enn hele veksten — de vokser altså <em>på tross av</em> at det dør flere enn det fødes.</li><li>Veksten er skjevt fordelt: 264 av 323 kommuner vokste saktere enn landet, og 119 hadde direkte nedgang.</li><li>Sterkest vekst: <strong>Lørenskog</strong> (Akershus), +54,7 % — men fra 33 308 innbyggere. Svakest: <strong>Røst</strong> (Nordland), -22,1 %.</li><li>Fylkesvis spenner det fra +27,0 % i Akershus til +2,5 % i Finnmark.</li></ul><figure class="figur full avslor"><a href="vekst_topp_bunn.png"><img src="vekst_topp_bunn.png" alt="To liggende søylediagram: de 20 kommunene med størst vekst og de 20 med størst nedgang, i prosent." loading="lazy" decoding="async"></a><figcaption>Prosentvekst rangerer små kommuner til topps og til bunns. Folketallet står ved siden av hver søyle, fordi 27 prosent i en kommune med 1 257 innbyggere er noe annet enn 27 prosent i Oslo.<span class="kilde">Kilde: SSB tabell 06913. Kommuner med grenseendring over 0,5 % av folketallet er holdt utenfor.</span></figcaption></figure><figure class="figur bred avslor"><a href="komponenter.png"><img src="komponenter.png" alt="Punktdiagram: fødselsoverskudd langs x-aksen, nettoinnflytting langs y-aksen, én prikk per kommune." loading="lazy" decoding="async"></a><figcaption>Den stiplede diagonalen er nullvekst. At skyen ligger langt mer spredt loddrett enn vannrett, er det samme funnet som i punktet over — sett fra siden.<span class="kilde">Kilde: SSB tabell 06913. Kommuner med grenseendring over 0,5 % av folketallet er holdt utenfor.</span></figcaption></figure></section><section id="fylker"><h2>Fylker</h2><div class="tabell-hylse avslor"><table data-sorterbar><thead><tr><th scope="col" class="left">Fylke</th><th scope="col" class="right">Kommuner</th><th scope="col" class="right">1.1.2011</th><th scope="col" class="right">1.1.2026</th><th scope="col" class="right">Vekst</th><th scope="col" class="right">Herav flytting</th></tr></thead><tbody><tr><td class="left">Akershus</td><td class="right">21</td><td class="right">589 763</td><td class="right">749 207</td><td class="right">+27,0 %</td><td class="right">124 850</td></tr><tr><td class="left">Oslo</td><td class="right">1</td><td class="right">599 230</td><td class="right">728 714</td><td class="right">+21,6 %</td><td class="right">47 732</td></tr><tr><td class="left">Rogaland</td><td class="right">23</td><td class="right">436 087</td><td class="right">508 922</td><td class="right">+16,7 %</td><td class="right">34 159</td></tr><tr><td class="left">Østfold</td><td class="right">12</td><td class="right">274 149</td><td class="right">316 448</td><td class="right">+15,4 %</td><td class="right">41 821</td></tr><tr><td class="left">Agder</td><td class="right">25</td><td class="right">282 456</td><td class="right">323 930</td><td class="right">+14,7 %</td><td class="right">30 416</td></tr><tr><td class="left">Vestfold</td><td class="right">6</td><td class="right">227 211</td><td class="right">259 332</td><td class="right">+14,1 %</td><td class="right">30 686</td></tr><tr><td class="left">Buskerud</td><td class="right">18</td><td class="right">239 185</td><td class="right">272 981</td><td class="right">+14,1 %</td><td class="right">29 801</td></tr><tr><td class="left">Trøndelag</td><td class="right">38</td><td class="right">429 928</td><td class="right">489 166</td><td class="right">+13,8 %</td><td class="right">40 920</td></tr><tr><td class="left">Vestland</td><td class="right">43</td><td class="right">590 775</td><td class="right">658 342</td><td class="right">+11,4 %</td><td class="right">36 775</td></tr><tr><td class="left">Møre og Romsdal</td><td class="right">27</td><td class="right">251 389</td><td class="right">273 169</td><td class="right">+8,7 %</td><td class="right">16 447</td></tr><tr><td class="left">Troms</td><td class="right">21</td><td class="right">158 879</td><td class="right">171 218</td><td class="right">+7,8 %</td><td class="right">7 656</td></tr><tr><td class="left">Telemark</td><td class="right">17</td><td class="right">169 185</td><td class="right">177 923</td><td class="right">+5,2 %</td><td class="right">11 422</td></tr><tr><td class="left">Innlandet</td><td class="right">46</td><td class="right">362 696</td><td class="right">379 488</td><td class="right">+4,6 %</td><td class="right">29 577</td></tr><tr><td class="left">Nordland</td><td class="right">41</td><td class="right">235 955</td><td class="right">243 272</td><td class="right">+3,1 %</td><td class="right">8 101</td></tr><tr><td class="left">Finnmark</td><td class="right">18</td><td class="right">73 417</td><td class="right">75 288</td><td class="right">+2,5 %</td><td class="right">811</td></tr></tbody></table></div><p class="tabell-tekst">Klikk på en kolonneoverskrift for å sortere.</p><figure class="figur bred avslor"><a href="fylke.png"><img src="fylke.png" alt="Liggende søyler per fylke, delt i nettoinnflytting og fødselsoverskudd." loading="lazy" decoding="async"></a><figcaption>Samme tabell som graf, med veksten delt i de to komponentene.<span class="kilde">Kilde: SSB tabell 06913, fylkesserien. Sorte punkter er samlet vekst; avviket fra søylene er restleddet SSB ikke fordeler.</span></figcaption></figure></section><section id="aar-for-aar"><h2>År for år</h2><figure class="figur full avslor"><a href="aarlig_utvikling.png"><img src="aarlig_utvikling.png" alt="Tre paneler med én tynn grå linje per kommune, median og persentilbånd lagt over." loading="lazy" decoding="async"></a><figcaption>Samlet tilvekst, nettoinnflytting og fødselsoverskudd, år for år. Panelene deler y-akse med vilje: fødselsoverskuddet holder seg innenfor et par prosent i alle kommuner alle år, mens flyttingen spriker. Med hver sin akse ville de sett like ut.<span class="kilde">Kilde: SSB tabell 06913. «Hele landet» er summen av endringene delt på samlet folketall, ikke medianen av kommunene.</span></figcaption></figure><figure class="figur full avslor"><a href="aarlig_ekstremer.png"><img src="aarlig_ekstremer.png" alt="Samme tre komponenter, men bare de fem høyeste og fem laveste kommunene, navngitt." loading="lazy" decoding="async"></a><figcaption>Spaghettigrafen over viser fordelingen og skjuler kommunene; denne gjør det motsatte. Utvalget er de 5 høyeste og laveste på kumulativ rate over hele perioden, ikke på enkeltår.<span class="kilde">Kilde: SSB tabell 06913. Hvert panel har sin egen y-akse. Bare sammenlignbare kommuner.</span></figcaption></figure></section><section id="metode"><h2>Metode</h2><ul class="funn"><li>Kilde: SSB tabell 06913, «06913: Befolkning og endringer, etter region og år». SSB oppdaterte tabellen 2026-04-15; hentet 2026-08-02T22:51:00Z, sha256 64045d19d407…</li><li>Modellene <code>mart.befolkning_kommune_aar</code>, <code>mart.befolkning_fylke_aar</code> og <code>mart.befolkningsvekst</code>, bygget av statman 2026-08-02 22:51:00Z. Råversjonen over er den byggeloggen oppgir, ikke den som tilfeldigvis er nyest nå.</li><li>Kommuneinndeling: SSBs kodeliste <code>agg_KommSummerHist</code> («Kommuner 2024, sammenslåtte tidsserier»). Den summerer historikken til sammenslåtte kommuner opp til dagens grenser, så kommunereformene i 2018 og 2020 gir ikke seriebrudd. Fylkestallene bruker <code>agg_KommFylkerHist</code>, som gjør det samme for fylker — ikke <code>agg_Fylker2024</code>, som bare har tallene for fylkene slik de faktisk het det året og summerer seg til 1,5 millioner i 2011.</li><li>Kodelista reverserer derimot ikke <em>delinger</em>, og fanger ikke grensejusteringer. Vi finner dem i stedet i tallene: der endringen i folkemengde ikke er lik folketilveksten SSB oppgir, har grensene flyttet seg. Differansen ligger i kolonnen <code>grenseavvik</code>.</li><li>Vi krever ikke at avviket er null, men at det største enkeltavviket er under 0,5 % av folketallet. Uten en toleranse ville en grensejustering på 29 personer kastet Drammen ut av statistikken. Kommuner over terskelen er merket <code>sammenlignbar = false</code> og holdt utenfor rangering og topplister; de nøyaktige avvikene står i <code>grenseavvik_sum</code> og <code>grenseavvik_maks_pst</code> for alle kommuner.</li><li>Det ga 34 utelatte kommuner av 357.</li><li>Kontroll: for de 351 kommunene som har folketall hele perioden, summerer grenseavvikene seg til -7 personer. Grensejusteringer flytter folk mellom kommuner, så summen skal være null. De resterende 53 846 tilhører de 6 kommunene som ble dannet av delte kommuner i 2020, og er de samme personene som mangler i kommunetabellen før det året.</li></ul><div class="tabell-hylse avslor"><table data-sorterbar><thead><tr><th scope="col" class="left">Kommune</th><th scope="col" class="left">Fylke</th><th scope="col" class="right">Grenseavvik</th><th scope="col" class="right">Største enkeltavvik</th><th scope="col" class="left">Hva som skjedde</th></tr></thead><tbody><tr><td class="left">Haram</td><td class="left">Møre og Romsdal</td><td class="right">+5</td><td class="right">99,7 %</td><td class="left">Skilt ut fra Ålesund 1.1.2024, egen kommune også før 2020</td></tr><tr><td class="left">Ålesund</td><td class="left">Møre og Romsdal</td><td class="right">-21</td><td class="right">16,6 %</td><td class="left">Haram skilt ut igjen 1.1.2024</td></tr><tr><td class="left">Vestnes</td><td class="left">Møre og Romsdal</td><td class="right">+411</td><td class="right">6,3 %</td><td class="left">Grensejustering 1.1.2021</td></tr><tr><td class="left">Stad</td><td class="left">Vestland</td><td class="right">+533</td><td class="right">6,0 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Rauma</td><td class="left">Møre og Romsdal</td><td class="right">-411</td><td class="right">5,5 %</td><td class="left">Grensejustering 1.1.2021</td></tr><tr><td class="left">Tønsberg</td><td class="left">Vestfold</td><td class="right">+2 061</td><td class="right">4,3 %</td><td class="left">Stokke delt mellom Tønsberg og Sandefjord 1.1.2017</td></tr><tr><td class="left">Midt-Telemark</td><td class="left">Telemark</td><td class="right">-442</td><td class="right">4,0 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Sandefjord</td><td class="left">Vestfold</td><td class="right">-2 236</td><td class="right">3,5 %</td><td class="left">Stokke delt mellom Tønsberg og Sandefjord 1.1.2017</td></tr><tr><td class="left">Notodden</td><td class="left">Telemark</td><td class="right">+442</td><td class="right">3,5 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Nes</td><td class="left">Akershus</td><td class="right">+682</td><td class="right">3,1 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Kinn</td><td class="left">Vestland</td><td class="right">-533</td><td class="right">3,0 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Hjelmeland</td><td class="left">Rogaland</td><td class="right">-77</td><td class="right">2,9 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Høyanger</td><td class="left">Vestland</td><td class="right">+110</td><td class="right">2,7 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Evje og Hornnes</td><td class="left">Agder</td><td class="right">+92</td><td class="right">2,5 %</td><td class="left">Grensejustering 1.1.2019</td></tr><tr><td class="left">Eidfjord</td><td class="left">Vestland</td><td class="right">+22</td><td class="right">2,4 %</td><td class="left">Grensejustering 1.1.2022</td></tr><tr><td class="left">Birkenes</td><td class="left">Agder</td><td class="right">-92</td><td class="right">1,8 %</td><td class="left">Grensejustering 1.1.2019</td></tr><tr><td class="left">Tvedestrand</td><td class="left">Agder</td><td class="right">+101</td><td class="right">1,6 %</td><td class="left">Grensejustering 1.1.2025</td></tr><tr><td class="left">Risør</td><td class="left">Agder</td><td class="right">-101</td><td class="right">1,5 %</td><td class="left">Grensejustering 1.1.2025</td></tr><tr><td class="left">Strand</td><td class="left">Rogaland</td><td class="right">+162</td><td class="right">1,3 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Ås</td><td class="left">Akershus</td><td class="right">-213</td><td class="right">1,0 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Volda</td><td class="left">Møre og Romsdal</td><td class="right">+81</td><td class="right">1,0 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Ørsta</td><td class="left">Møre og Romsdal</td><td class="right">-104</td><td class="right">1,0 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Sogndal</td><td class="left">Vestland</td><td class="right">-110</td><td class="right">0,9 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Lillestrøm</td><td class="left">Akershus</td><td class="right">-682</td><td class="right">0,8 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Indre Fosen</td><td class="left">Trøndelag</td><td class="right">+69</td><td class="right">0,7 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Holmestrand</td><td class="left">Vestfold</td><td class="right">+148</td><td class="right">0,6 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Ullensvang</td><td class="left">Vestland</td><td class="right">-89</td><td class="right">0,6 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Nærøysund</td><td class="left">Trøndelag</td><td class="right">-52</td><td class="right">0,5 %</td><td class="left">Grensejustering 1.1.2020</td></tr><tr><td class="left">Vestre Slidre</td><td class="left">Innlandet</td><td class="right">-11</td><td class="right">0,5 %</td><td class="left">Grensejustering 1.1.2021</td></tr><tr><td class="left">Hábmer - Hamarøy</td><td class="left">Nordland</td><td class="right">+2 766</td><td class="right">—</td><td class="left">Ny kommune 2020 av Hamarøy og deler av Tysfjord</td></tr><tr><td class="left">Hitra</td><td class="left">Trøndelag</td><td class="right">+5 050</td><td class="right">—</td><td class="left">Utvidet 2020 med deler av Snillfjord</td></tr><tr><td class="left">Orkland</td><td class="left">Trøndelag</td><td class="right">+18 217</td><td class="right">—</td><td class="left">Ny kommune 2020 av Orkdal, Meldal m.fl. og deler av Snillfjord</td></tr><tr><td class="left">Narvik</td><td class="left">Nordland</td><td class="right">+21 845</td><td class="right">—</td><td class="left">Ny kommune 2020 av Narvik, Ballangen og deler av Tysfjord</td></tr><tr><td class="left">Heim</td><td class="left">Trøndelag</td><td class="right">+5 963</td><td class="right">—</td><td class="left">Ny kommune 2020 av Hemne, Halsa og deler av Snillfjord</td></tr></tbody></table></div><p class="tabell-tekst">De 34 kommunene som er holdt utenfor rangeringen, og hvorfor.</p><ul class="funn"><li><strong>53 011 personer mangler i kommunetabellen i 2011.</strong> Kommuner som ble <em>delt</em> i 2020 — Tysfjord og Snillfjord — har en historikk som ikke lar seg tilordne én kommune i dagens inndeling. SSB legger den i samlekategorien «Delte kommuner og uoppgitt», som ikke er noen kommune og derfor ikke er med her. Summen av de 357 kommunene er altså 53 011 lavere enn Norges folketall til og med 2019, og null lavere fra 2020. Landstallene og fylkestabellen her er hentet fra fylkesserien, som har dem med.</li><li>Ingen justering for at kommuner er ulike i størrelse. Prosentvekst og absolutt vekst gir to forskjellige topplister; CSV-en har begge.</li></ul></section><section class="forbehold" id="forbehold"><h2>Forbehold</h2><p class="hvorfor">Det som må stå ved siden av tallene for at de skal kunne forsvares. Hentet fra metrikkatalogen, ikke skrevet på nytt her.</p><details><summary>Befolkningsvekst over perioden <span class="enhet">andel (0.144 = 14,4 %)</span></summary><p class="kilde-linje">Kilde: SSB tabell 06913, kodeliste agg_KommSummerHist (Kommuner 2024)</p><ul><li>Måler 1.1.2011 mot 1.1.2026, altså veksten gjennom kalenderårene 2011–2025. Periodens lengde står i kolonnene aar_start og aar_slutt, ikke i navnet på metrikken.</li><li>Gjelder bare kommuner med sammenlignbar = true. 34 av 357 kommuner byttet grenser eller mangler historikk, og har rangering = null. Prosenten deres måler grenseendringen, ikke befolkningsutviklingen.</li><li>Sammenlignbar krever at det største enkeltavviket er under 0,5 prosent av folketallet, ikke at det er null. Terskelen er en vurdering. De faktiske avvikene ligger i grenseavvik_sum og grenseavvik_maks_pst, så en strengere eller løsere grense kan settes uten å bygge om noe.</li><li>Prosentvekst er ustabil i små kommuner. En kommune med 500 innbyggere flytter seg 10 prosent på 50 personer. Oppgi alltid folkemengden sammen med prosenten.</li><li>Enkeltinstitusjoner slår gjennom. Råde vokste 9 prosent i 2022 og falt 5 prosent i 2023 fordi ankomstsenteret der ble fylt og tømt. Slike utslag er ekte registrerte bosatte, men de er ikke det folk leser inn i «befolkningsvekst».</li></ul></details><details><summary>Fødselsoverskudd, sum over perioden <span class="enhet">personer</span></summary><p class="kilde-linje">Kilde: SSB tabell 06913, kodeliste agg_KommSummerHist (Kommuner 2024)</p><ul><li>Levendefødte minus døde blant registrerte bosatte i kommunen.</li><li>Negativt i 200 av 323 sammenlignbare kommuner i 2011–2025. Det er normaltilstanden i norske kommuner, ikke et avvik som skal forklares.</li></ul></details><details><summary>Nettoinnflytting, sum over perioden <span class="enhet">personer</span></summary><p class="kilde-linje">Kilde: SSB tabell 06913, kodeliste agg_KommSummerHist (Kommuner 2024)</p><ul><li>Flytting mellom norske kommuner teller likt med inn- og utvandring. Summen over alle kommuner er derfor ikke nettoinnvandringen til Norge, og en kommunes tall sier ingenting om hvor folk kom fra.</li><li>Fødselsoverskudd pluss nettoinnflytting er ikke alltid nøyaktig lik folketilveksten. Restleddet er lite — 1 person i median per kommuneår, 267 på det meste — og ligger i kolonnen restledd i stedet for å bli fordelt på komponentene.</li></ul></details><details><summary>Folkemengde i kommunen <span class="enhet">personer</span></summary><p class="kilde-linje">Kilde: SSB tabell 06913, kodeliste agg_KommSummerHist (Kommuner 2024)</p><ul><li>Bestand per 1. januar i året på raden. Endringstallene på samme rad gjelder derimot kalenderåret som følger. Folkemengde 2026 er altså 1.1.2026, og folketilvekst 2025 er veksten som førte dit.</li><li>Registrerte bosatte etter Folkeregisteret. Personer med forventet opphold under seks måneder, og asylsøkere uten innvilget opphold, er ikke med. De blir talt fra den dagen de får opphold, og teller da som innflytting til kommunen de bor i.</li><li>Summen over de 357 kommunene er 53 011 lavere enn Norges folketall til og med 2019, og stemmer fra 2020. Differansen er historikken til kommuner som ble delt i 2020, som SSB ikke tilordner noen kommune i dagens inndeling. Bruk mart.befolkning_fylke_aar til lands- og fylkestall.</li><li class="brudd"><strong>Seriebrudd.</strong> Fem kommuner har folkemengde 0 før 2020 fordi de ble dannet av kommuner som ble delt — Narvik og Hábmer-Hamarøy (Tysfjord), Heim, Hitra og Orkland (Snillfjord). Det er ikke befolkning som mangler, det er en inndeling som ikke fantes. Kolonnen aar_uten_folketall teller årene.</li><li class="brudd"><strong>Seriebrudd.</strong> 1.1.2024 ble Ålesund delt i Ålesund (1508) og Haram (1580). Haram var egen kommune også til og med 2019, sto med 0 innbyggere 2020–2023 mens den var en del av Ålesund, og er tilbake fra 2024. Serien er brutt to ganger og kan ikke brukes uten å håndtere begge.</li><li class="brudd"><strong>Seriebrudd.</strong> Grensejusteringer i 2017 (Stokke delt mellom Tønsberg og Sandefjord), 2019, 2020, 2022, 2024 og 2026. Alle er merket i kolonnen grenseavvik.</li></ul></details></section><section id="filer"><h2>Filer</h2><ul class="filer"><li><a href="befolkningsvekst_kommune.csv" download><span class="navn">befolkningsvekst_kommune.csv</span><span class="om">alle kommuner, alle kolonner</span></a></li><li><a href="vekst_topp_bunn.png" download><span class="navn">vekst_topp_bunn.png</span><span class="om">topp og bunn på prosentvekst</span></a></li><li><a href="aarlig_utvikling.png" download><span class="navn">aarlig_utvikling.png</span><span class="om">årlig rate per kommune, tre paneler med felles akse</span></a></li><li><a href="aarlig_ekstremer.png" download><span class="navn">aarlig_ekstremer.png</span><span class="om">de fem høyeste og laveste per komponent, navngitt</span></a></li><li><a href="komponenter.png" download><span class="navn">komponenter.png</span><span class="om">fødselsoverskudd mot nettoinnflytting</span></a></li><li><a href="fylke.png" download><span class="navn">fylke.png</span><span class="om">fylkesvis vekst delt i komponenter</span></a></li></ul></section><footer class="kvittering"><h2>Statman · kvittering</h2><hr><dl><dt>Kilde</dt><dd>SSB tabell 06913 — 06913: Befolkning og endringer, etter region og år</dd><dt>Oppdatert</dt><dd>2026-04-15</dd><dt>Hentet</dt><dd>2026-08-02T22:51:00Z</dd><dt>sha256</dt><dd>64045d19d4071ad15507d34bd5ac222f6b885f5231bc15bc8652e25dc6d23389</dd><dt>Kodeliste</dt><dd>agg_KommSummerHist · agg_KommFylkerHist</dd><dt>Modeller</dt><dd>mart.befolkning_kommune_aar · mart.befolkning_fylke_aar · mart.befolkningsvekst</dd><dt>Bygget</dt><dd>2026-08-02 22:51:00Z</dd></dl><hr><p class="bunn">Hvert tall over sporer til hentingen som ga det.</p></footer></article>
+<script>
+/* Statman — publiseringslaget.
+   Fire små ting: lesefremdrift, tall som teller opp, figurer som glir inn,
+   tabeller som kan sorteres. Ingenting her endrer et tall, og sida er fullt
+   lesbar uten skript i det hele tatt. */
+(function () {
+  "use strict";
+
+  var rolig = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (rolig) document.body.classList.add("rolig");
+
+  /* ------------------------------------------------------ lesefremdrift */
+  var stripe = document.getElementById("fremdrift");
+  if (stripe) {
+    var ventende = false;
+    var tegn = function () {
+      ventende = false;
+      var h = document.documentElement;
+      var strekk = h.scrollHeight - h.clientHeight;
+      var del = strekk > 0 ? h.scrollTop / strekk : 0;
+      stripe.style.width = Math.min(100, Math.max(0, del * 100)).toFixed(2) + "%";
+    };
+    addEventListener("scroll", function () {
+      if (!ventende) { ventende = true; requestAnimationFrame(tegn); }
+    }, { passive: true });
+    addEventListener("resize", tegn, { passive: true });
+    tegn();
+  }
+
+  /* --------------------------------------------------------- norske tall */
+  // "+707 095", "14,4 %", "−22,1 %" -> {før, tall, desimaler, etter}
+  // Tallet får ikke slutte på mellomrom — ellers spiser det opp det harde
+  // mellomrommet foran «%» og «øre», og enheten klistrer seg til tallet.
+  var TALL = /^(.*?)(\d(?:[\d\s]*\d)?(?:,\d+)?)(.*)$/s;
+
+  function les(tekst) {
+    var m = TALL.exec(tekst);
+    if (!m) return null;
+    var rå = m[2].replace(/\s/g, "").replace(",", ".");
+    var verdi = parseFloat(rå);
+    if (!isFinite(verdi)) return null;
+    var komma = m[2].indexOf(",");
+    return {
+      før: m[1],
+      verdi: verdi,
+      desimaler: komma === -1 ? 0 : m[2].length - komma - 1,
+      etter: m[3]
+    };
+  }
+
+  function skriv(del, verdi) {
+    return del.før + verdi.toLocaleString("nb-NO", {
+      minimumFractionDigits: del.desimaler,
+      maximumFractionDigits: del.desimaler
+    }) + del.etter;
+  }
+
+  /* ------------------------------------------- nøkkeltall som teller opp */
+  function tell(el) {
+    var del = les(el.textContent);
+    if (!del) return;
+    var start = performance.now();
+    var varighet = 900;
+    var steg = function (nå) {
+      var t = Math.min(1, (nå - start) / varighet);
+      var lettet = 1 - Math.pow(1 - t, 3);
+      el.textContent = skriv(del, del.verdi * lettet);
+      if (t < 1) requestAnimationFrame(steg);
+      else el.textContent = skriv(del, del.verdi);
+    };
+    requestAnimationFrame(steg);
+  }
+
+  /* ------------------------------------------------ avsløring ved scroll */
+  var mål = document.querySelectorAll(".avslor");
+  if (!rolig && "IntersectionObserver" in window) {
+    var kikker = new IntersectionObserver(function (poster) {
+      poster.forEach(function (post) {
+        if (!post.isIntersecting) return;
+        post.target.classList.add("synlig");
+        post.target.querySelectorAll(".tall").forEach(tell);
+        kikker.unobserve(post.target);
+      });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.12 });
+    mål.forEach(function (el) { kikker.observe(el); });
+  } else {
+    mål.forEach(function (el) { el.classList.add("synlig"); });
+  }
+
+  /* ---------------------------------------------------- sorterbare tabeller */
+  document.querySelectorAll("table[data-sorterbar]").forEach(function (tabell) {
+    var kropp = tabell.tBodies[0];
+    if (!kropp) return;
+    var opprinnelig = Array.prototype.slice.call(kropp.rows);
+
+    tabell.querySelectorAll("thead th").forEach(function (th, kol) {
+      th.classList.add("h");
+      th.tabIndex = 0;
+      th.setAttribute("role", "button");
+
+      var sorter = function () {
+        var vei = th.dataset.vei === "ned" ? "opp" : th.dataset.vei === "opp" ? "" : "ned";
+        tabell.querySelectorAll("thead th").forEach(function (annen) {
+          delete annen.dataset.vei;
+          annen.removeAttribute("aria-sort");
+        });
+
+        if (!vei) {
+          opprinnelig.forEach(function (rad) { kropp.appendChild(rad); });
+          return;
+        }
+        th.dataset.vei = vei;
+        th.setAttribute("aria-sort", vei === "ned" ? "descending" : "ascending");
+
+        var retning = vei === "ned" ? -1 : 1;
+        var rader = Array.prototype.slice.call(kropp.rows);
+        rader.sort(function (a, b) {
+          var ta = a.cells[kol].textContent.trim();
+          var tb = b.cells[kol].textContent.trim();
+          var na = les(ta), nb = les(tb);
+          // Bare tallsortering når hele kolonneparet er tall. Ellers
+          // ville «Nes» og «1806» blitt sammenlignet på hver sin skala.
+          if (na && nb && /^[^\p{L}]*$/u.test(ta.replace(/[%\s]/g, ""))) {
+            var fa = /^\s*[-−]/.test(ta) ? -na.verdi : na.verdi;
+            var fb = /^\s*[-−]/.test(tb) ? -nb.verdi : nb.verdi;
+            return (fa - fb) * retning;
+          }
+          return ta.localeCompare(tb, "nb") * retning;
+        });
+        rader.forEach(function (rad) { kropp.appendChild(rad); });
+      };
+
+      th.addEventListener("click", sorter);
+      th.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); sorter(); }
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -146,7 +146,7 @@ def test_chart_writes_full_sakspakke(built: list[registry.BuildResult], project:
     written = kraftpris_chart.main()
     names = {p.name for p in written}
 
-    assert names == {"kraftpris.csv", "kraftpris.png", "notat.md"}
+    assert names == {"kraftpris.csv", "kraftpris.png", "notat.md", "artikkel.json"}
     assert all(p.exists() and p.stat().st_size > 0 for p in written)
 
     png = next(p for p in written if p.suffix == ".png")

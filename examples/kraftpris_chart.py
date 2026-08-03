@@ -5,6 +5,10 @@ et datasett, en graf og et notat der funn, metode og forbehold står sammen,
 og der forbeholdene er hentet fra katalogen i stedet for å bli skrevet på nytt
 hver gang.
 
+Notatet skrives ikke for hånd. ``artikkel()`` bygger en
+:class:`statman.publish.Article`, og både ``notat.md`` og en eventuell
+publisert side rendres fra den — så de kan ikke gli fra hverandre.
+
 Kjør:  uv run statman example
 """
 
@@ -20,7 +24,7 @@ matplotlib.use("Agg")  # ingen skjerm, skriver rett til fil
 import matplotlib.pyplot as plt  # noqa: E402
 import polars as pl  # noqa: E402
 
-from statman import catalog, io  # noqa: E402
+from statman import io, publish  # noqa: E402
 from statman.sources import synthetic  # noqa: E402
 
 MODEL = "mart.kraftpris_maaned"
@@ -85,42 +89,108 @@ def _plot(df: pl.DataFrame, path: Path, ref_month: str) -> Path:
     return path
 
 
-def _notat(df: pl.DataFrame, path: Path, ref_month: str) -> Path:
+def _tall(verdi: float, desimaler: int = 0) -> str:
+    return f"{verdi:,.{desimaler}f}".replace(",", " ").replace(".", ",")
+
+
+def artikkel(df: pl.DataFrame, ref_month: str) -> publish.Article:
+    """Sakspakken som struktur. Notatet og nettsida rendres begge fra denne."""
     peak = df.sort("ore_faste_kroner", descending=True).row(0, named=True)
     first_year = df.filter(pl.col("month").dt.year() == df["month"].dt.year().min())
     last_year = df.filter(pl.col("month").dt.year() == df["month"].dt.year().max())
+    aar_start = int(first_year["month"].dt.year().min())
+    aar_slutt = int(last_year["month"].dt.year().max())
     start = float(first_year["ore_faste_kroner"].mean())
     end = float(last_year["ore_faste_kroner"].mean())
 
-    lines = [
-        "# Kraftpris per prisområde (syntetiske data)",
-        "",
-        "## Funn",
-        "",
-        f"- Høyeste realpris i serien: **{peak['ore_faste_kroner']:.0f} øre/kWh** "
-        f"i {peak['prisomrade']}, {month_label(peak['month'])}.",
-        f"- Snitt realpris {first_year['month'].dt.year().min()}: {start:.1f} øre/kWh. "
-        f"Snitt {last_year['month'].dt.year().max()}: {end:.1f} øre/kWh "
-        f"({(end / start - 1) * 100:+.0f} %).",
-        "- Utslaget er systematisk større i de sørlige prisområdene enn i de nordlige.",
-        "",
-        "## Metode",
-        "",
-        f"- Kilde: modellen `{MODEL}`, bygget av statman.",
-        f"- Nominelle priser deflatert med KPI til {ref_month}-kroner.",
-        "- Ingen sesongjustering. Kraftpris har sterk og velkjent årssyklus;"
-        " sammenlign måned mot samme måned året før.",
-        "",
-        "## Forbehold",
-        "",
-    ]
-    for key in METRICS:
-        lines.append(catalog.metric(key).note())
-        lines.append("")
-    lines.append("**Dette er syntetiske data laget for å teste pipelinen. Ikke publiser dem.**")
+    bygg = io.read_manifest(MODEL)
 
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+    return publish.Article(
+        slug=SLUG,
+        kicker="Syntetiske data · testkjede",
+        title="Kraftpris per prisområde",
+        lead=(
+            "Tallene er oppdiktet, problemet er ekte: nominelle kroner fra ulike år "
+            "kan ikke sammenlignes uten å deflateres. Saken finnes for å vise formen "
+            "på en sakspakke, ikke for å si noe om strømprisen."
+        ),
+        published=bygg["built_at"][:10],
+        sections=(
+            publish.Section(
+                "Funn",
+                (
+                    publish.Stats(
+                        (
+                            publish.Stat(
+                                f"{_tall(peak['ore_faste_kroner'])} øre",
+                                "Høyeste realpris i serien",
+                                f"{peak['prisomrade']}, {month_label(peak['month'])}",
+                            ),
+                            publish.Stat(
+                                f"{_tall(start, 1)} øre", f"Snitt {aar_start}", "per kWh"
+                            ),
+                            publish.Stat(
+                                f"{_tall(end, 1)} øre", f"Snitt {aar_slutt}", "per kWh"
+                            ),
+                            publish.Stat(
+                                f"{(end / start - 1) * 100:+.0f} %".replace(".", ","),
+                                "Endring i faste kroner",
+                                f"{aar_start} mot {aar_slutt}",
+                            ),
+                        )
+                    ),
+                    publish.Findings(
+                        (
+                            f"Høyeste realpris i serien: **{_tall(peak['ore_faste_kroner'])} "
+                            f"øre/kWh** i {peak['prisomrade']}, {month_label(peak['month'])}.",
+                            f"Snitt realpris {aar_start}: {_tall(start, 1)} øre/kWh. "
+                            f"Snitt {aar_slutt}: {_tall(end, 1)} øre/kWh "
+                            f"({(end / start - 1) * 100:+.0f} %).",
+                            "Utslaget er systematisk større i de sørlige prisområdene "
+                            "enn i de nordlige.",
+                        )
+                    ),
+                    publish.Figure(
+                        "kraftpris.png",
+                        alt="To paneler: nominell kraftpris øverst, faste kroner nederst, "
+                        "én linje per prisområde.",
+                        caption="Samme serie i løpende og faste kroner. Forskjellen mellom "
+                        "panelene er hele poenget med saken.",
+                        source=f"Kilde: statman.sources.synthetic. Faste {ref_month}-kroner.",
+                    ),
+                ),
+            ),
+            publish.Section(
+                "Metode",
+                (
+                    publish.Findings(
+                        (
+                            f"Kilde: modellen `{MODEL}`, bygget av statman.",
+                            f"Nominelle priser deflatert med KPI til {ref_month}-kroner.",
+                            "Ingen sesongjustering. Kraftpris har sterk og velkjent "
+                            "årssyklus; sammenlign måned mot samme måned året før.",
+                        )
+                    ),
+                    publish.Prose(
+                        "**Dette er syntetiske data laget for å teste pipelinen. "
+                        "Ikke publiser dem.**"
+                    ),
+                ),
+            ),
+        ),
+        caveats=METRICS,
+        provenance={
+            "Kilde": "statman.sources.synthetic — ikke ekte statistikk",
+            "Modell": MODEL,
+            "Bygget": bygg["built_at"][:19].replace("T", " ") + "Z",
+            "Rader": str(bygg["rows"]),
+            "Referansemåned": ref_month,
+        },
+        files=(
+            ("kraftpris.csv", "hele serien, alle prisområder og kolonner"),
+            ("kraftpris.png", "nominell og real kraftpris per prisområde"),
+        ),
+    )
 
 
 def main() -> list[Path]:
@@ -132,11 +202,15 @@ def main() -> list[Path]:
     ref_month = month_label(df["month"].max())
     csv_path = target / "kraftpris.csv"
     df.write_csv(csv_path)
+    png_path = _plot(df, target / "kraftpris.png", ref_month)
 
+    art = artikkel(df, ref_month)
+    art.validate(target)
     return [
         csv_path,
-        _plot(df, target / "kraftpris.png", ref_month),
-        _notat(df, target / "notat.md", ref_month),
+        png_path,
+        publish.markdown.write(art, target / "notat.md"),
+        art.write(target),
     ]
 
 
