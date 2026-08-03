@@ -1,0 +1,161 @@
+{
+  "schema": "statman/artikkel/1",
+  "slug": "preben_borgerlig",
+  "title": "Er Preben en borgerlig navnetrend?",
+  "kicker": "Kuriosa · SSB tabell 10467 og 09624",
+  "lead": "Andelen nyfødte gutter som heter Preben, mot den borgerlige blokkens oppslutning ved samme stortingsvalg, 1973–2021. r = -0,11 over 13 valgår — for lite til å konkludere noe vei, og det er selve konklusjonen.",
+  "published": "2026-08-03",
+  "sections": [
+    {
+      "title": "Funn",
+      "blocks": [
+        {
+          "type": "stats",
+          "items": [
+            {
+              "value": "-0,11",
+              "label": "Korrelasjon (r)",
+              "note": "n = 13 valgår"
+            },
+            {
+              "value": "p = 0,73",
+              "label": "Ikke statistisk signifikant",
+              "note": "tosidig t-test, H0: r = 0"
+            },
+            {
+              "value": "1997",
+              "label": "Høyest Preben-andel",
+              "note": "0.259 % av nyfødte gutter"
+            },
+            {
+              "value": "2021",
+              "label": "Lavest Preben-andel",
+              "note": "0.023 % av nyfødte gutter"
+            }
+          ]
+        },
+        {
+          "type": "findings",
+          "items": [
+            "Korrelasjonen mellom andelen nyfødte gutter som heter Preben og borgerlig oppslutning samme valgår er **svakt negativ**: r = -0,11 over 13 stortingsvalg (p = 0,73, ikke signifikant på noe vanlig nivå).",
+            "Med bare 13 observasjoner skal det uvanlig mye til før et tall som dette kan skilles fra tilfeldig støy — se følsomhetstabellen under.",
+            "Toppåret for Preben-navngiving var 1997, midt i en periode med middels borgerlig oppslutning. Navnet var på vei ned igjen lenge før de blåblå vant valget i 2013."
+          ]
+        },
+        {
+          "type": "figure",
+          "file": "tidsserie.png",
+          "alt": "Linjediagram med to akser: andel Preben-navngivinger per år til venstre, borgerlig valgoppslutning til høyre.",
+          "caption": "De to seriene beveger seg ikke sammen. Preben-andelen topper i 1997 og faller jevnt etterpå; den borgerlige oppslutningen svinger opp og ned uavhengig av det.",
+          "source": "Kilde: SSB tabell 10467 og 09624.",
+          "width": "full"
+        },
+        {
+          "type": "figure",
+          "file": "scatter.png",
+          "alt": "Punktdiagram: borgerlig oppslutning langs x-aksen, Preben-andel langs y-aksen, ett punkt per stortingsvalg, med regresjonslinje.",
+          "caption": "De 13 brukbare valgårene. Spredningen er stor og punktene få — linjen er det regresjonen gir, ikke et mønster øyet ville funnet uten den.",
+          "source": "Kilde: SSB tabell 10467 og 09624.",
+          "width": "bred"
+        }
+      ]
+    },
+    {
+      "title": "Følsomhet",
+      "blocks": [
+        {
+          "type": "findings",
+          "items": [
+            "Hovedfunnet over bruker ingen forskyvning: fødselsår mot valgår samme år. Tabellen under viser hva som skjer med noen andre forskyvninger — ikke fordi noen av dem er en bedre hypotese, men fordi det er slik man ser om et tall er robust eller bare var det utvalget som tilfeldigvis ga høyest tall.",
+            "Med denne mengden data er svaret at det ikke er robust. r skifter fortegn og størrelse mellom forskyvningene uten noe mønster som tyder på en ekte sammenheng et sted i tidsrommet."
+          ]
+        },
+        {
+          "type": "table",
+          "columns": [
+            "Forskyvning",
+            "Antall par",
+            "r"
+          ],
+          "rows": [
+            [
+              "-8 år",
+              "11",
+              "-0,35"
+            ],
+            [
+              "-4 år",
+              "12",
+              "-0,52"
+            ],
+            [
+              "0 år (hovedfunn)",
+              "13",
+              "-0,11"
+            ],
+            [
+              "+4 år",
+              "14",
+              "+0,14"
+            ],
+            [
+              "+8 år",
+              "14",
+              "+0,54"
+            ]
+          ],
+          "align": [
+            "left",
+            "right",
+            "right"
+          ],
+          "caption": "Positiv forskyvning = borgerlig oppslutning målt år(ene) etter fødselsåret. Færre par ved store forskyvninger fordi valgår da havner utenfor 1969-2025."
+        }
+      ]
+    },
+    {
+      "title": "Metode",
+      "blocks": [
+        {
+          "type": "findings",
+          "items": [
+            "Navnetall: SSB tabell 10467, «10467: Fødte, etter fornavn og år». Oppdatert 2026-01-28, hentet 2026-08-03T20:35:50Z, sha256 71eb13a778f7….",
+            "Valgtall: SSB tabell 09624, «09624: Stortingsvalget. Velgere (prosent), etter politisk parti, kjønn og fireårlig» — selvrapportert stemmegivning fra valgundersøkelsen, ikke opptalte resultater. Oppdatert 2025-12-15, hentet 2026-08-03T20:35:51Z, sha256 e311ebf16a26….",
+            "«Borgerlig» er Høyre (kode 03) + Fremskrittspartiet (02) + Kristelig Folkeparti (04) + Venstre (07). Senterpartiet er utelatt — se `statman/models/mart_navn_politikk.py` for begrunnelsen. Et annet partiutvalg gir et annet tall enn r over.",
+            "Modellene `mart.navn_preben_aar`, `mart.velgere_borgerlig` og `mart.preben_borgerlig`, bygget av statman 2026-08-03 20:35:51Z.",
+            "2 av 15 valgår er utelatt fra korrelasjonen: 1969 (FrP fantes ikke ennå), 2025 (Preben-tallet er undertrykt eller ikke ferdig talt opp).",
+            "p-verdien over tester om r er forskjellig fra null, ikke om Preben *forårsaker* eller *forårsakes av* borgerlig oppslutning. Med to tidsserier som begge endrer seg sakte, vil nesten hvilket som helst par av dem korrelere svakt av rene tidstrend-grunner — det er selve grunnen til at man ikke kan lese en kausal historie ut av et slikt tall, uansett hvor det lander."
+          ]
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "navn_preben_andel",
+    "velgere_borgerlig_andel"
+  ],
+  "provenance": {
+    "Navnekilde": "SSB tabell 10467 — 10467: Fødte, etter fornavn og år",
+    "Valgkilde": "SSB tabell 09624 — 09624: Stortingsvalget. Velgere (prosent), etter politisk parti, kjønn og fireårlig",
+    "Hentet (navn)": "2026-08-03T20:35:50Z",
+    "Hentet (valg)": "2026-08-03T20:35:51Z",
+    "sha256 (navn)": "71eb13a778f7a197c80fc5b1f82192550c22ad46f3b910fd2cb7dc38cb65a6ec",
+    "sha256 (valg)": "e311ebf16a2642b502b890510f55bddd52c3207f76328caf82b521aa0a6d20d5",
+    "Modeller": "mart.navn_preben_aar · mart.velgere_borgerlig · mart.preben_borgerlig",
+    "Bygget": "2026-08-03 20:35:51Z"
+  },
+  "files": [
+    [
+      "preben_borgerlig.csv",
+      "alle 15 valgår, inkludert de utelatte"
+    ],
+    [
+      "tidsserie.png",
+      "begge seriene over tid, hver sin akse"
+    ],
+    [
+      "scatter.png",
+      "de brukbare valgårene, med regresjonslinje"
+    ]
+  ]
+}

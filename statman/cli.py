@@ -169,6 +169,7 @@ def list_published() -> None:
 EXAMPLES: dict[str, str] = {
     "kraftpris": "examples.kraftpris_chart",
     "befolkning": "examples.befolkningsvekst",
+    "preben": "examples.preben_borgerlig",
 }
 
 

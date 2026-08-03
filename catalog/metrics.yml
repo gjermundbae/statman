@@ -140,3 +140,51 @@ nettoinnflytting_sum:
       267 på det meste — og ligger i kolonnen restledd i stedet for å bli
       fordelt på komponentene.
   breaks: []
+
+# --------------------------------------------------------------------------
+# Preben mot borgerlig oppslutning. Underholdning med ekte tall, ikke
+# vitenskap — se caveats. 15 valgår, hvorav 2 faller bort, er ikke et
+# datagrunnlag noen konklusjon bør hvile tungt på.
+# --------------------------------------------------------------------------
+
+navn_preben_andel:
+  label: Andel nyfødte gutter som heter Preben
+  model: mart.navn_preben_aar
+  column: andel_fodte_pst
+  unit: prosent av nyfødte gutter det året
+  source: SSB tabell 10467, «Fødte, etter jentenavn og guttenavn»
+  caveats:
+    - Tall under fire personer er ikke oppgitt av personvernhensyn, og vises
+      som manglende, ikke som null. Det gjelder flere av de siste årene, der
+      Preben er blitt sjeldent.
+    - Måler fødselsår til og med 2020 og navngivningsår fra og med 2021 —
+      SSB byttet metode det året. De to er ikke identiske; et barn kan
+      navngis året etter det er født.
+    - Navngivningsår har et etterslep. 2023-2025 er derfor enten undertrykt
+      eller ikke ferdig talt opp i denne hentingen — se aarets status i
+      mart.navn_preben_aar før du bruker de siste årene til noe.
+    - Navnemoter drives av alt fra kongehus til TV-serier til at navnet ble
+      vanlig nok forrige generasjon til å virke gammeldags neste. Politisk
+      klima er én av svært mange mulige forklaringer, ikke den opplagte.
+  breaks: []
+
+velgere_borgerlig_andel:
+  label: Borgerlig oppslutning (H, FrP, KrF, V), valgår
+  model: mart.velgere_borgerlig
+  column: borgerlig_andel_pst
+  unit: prosent av velgerne
+  source: SSB tabell 09624, «Stortingsvalget. Velgere, etter politisk parti og kjønn»
+  caveats:
+    - Selvrapportert stemmegivning fra SSBs valgundersøkelse, ikke opptalte
+      valgresultater. Den følger de faktiske resultatene tett, men er ikke
+      identisk med dem.
+    - "«Borgerlig» er her Høyre + Fremskrittspartiet + Kristelig Folkeparti
+      + Venstre. Senterpartiet er holdt utenfor — se
+      statman/models/mart_navn_politikk.py for begrunnelsen. Et annet
+      partiutvalg gir et annet tall."
+    - Bare stortingsvalgår, altså hvert fjerde år. 1969 mangler
+      Fremskrittspartiet, som ikke fantes ennå, og har derfor ingen
+      blokksum i dette datasettet.
+    - Femten valgår er et lite datagrunnlag for enhver korrelasjon. Se
+      metodeavsnittet i sakspakken for hvor lite.
+  breaks: []
