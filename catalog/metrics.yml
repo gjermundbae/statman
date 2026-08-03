@@ -188,3 +188,66 @@ velgere_borgerlig_andel:
     - Femten valgår er et lite datagrunnlag for enhver korrelasjon. Se
       metodeavsnittet i sakspakken for hvor lite.
   breaks: []
+
+# --------------------------------------------------------------------------
+# Preben mot meningsmålinger. Samme spørsmål som over, men årlig i stedet
+# for hvert fjerde år, og på endring i stedet for nivå — se
+# statman/models/mart_meningsmaling_politikk.py for hvorfor nivå alene er
+# en felle når begge seriene beveger seg i lange buer.
+# --------------------------------------------------------------------------
+
+meningsmaling_borgerlig_andel:
+  label: Borgerlig oppslutning (H, FrP, KrF, V), årssnitt av meningsmålinger
+  model: mart.velgere_borgerlig_meningsmaling
+  column: borgerlig_andel_pst
+  unit: prosent av velgerne, snitt av tolv månedlige målinger
+  source: pollofpolls.no, «Gjennomsnitt av nasjonale meningsmålinger om stortingsvalg»
+  caveats:
+    - "Ikke offisiell statistikk: et redaksjonelt beregnet snitt av
+      publiserte meningsmålinger, ikke et opptalt resultat og ikke en
+      enkeltmåling. Metoden er tredjepartens egen og kan ikke etterprøves
+      fra utsiden."
+    - "Årssnittet er vårt eget, ikke hentet ferdig fra kilden: gjennomsnitt
+      av de tolv månedlige snittene i kalenderåret. Et år med færre enn
+      tolv måneder — i praksis bare inneværende år før det er omme — er
+      utelatt i stedet for å vises som et ufullstendig gjennomsnitt."
+    - "«Borgerlig» er samme fire partier som i velgere_borgerlig_andel:
+      Høyre + Fremskrittspartiet + Kristelig Folkeparti + Venstre."
+    - Dekker 2008 og framover — det er der kildens egen månedlige serie
+      begynner, ikke en grense vi har satt.
+    - "Meningsmålinger svinger av grunner som ikke har noe med navnemoter å
+      gjøre: enkeltsaker, statsministerkandidater, partilederbytter."
+  breaks: []
+
+meningsmaling_borgerlig_endring:
+  label: Endring i borgerlig oppslutning fra året før
+  model: mart.preben_trend
+  column: delta_borgerlig_pst
+  unit: prosentpoeng fra året før
+  source: pollofpolls.no, «Gjennomsnitt av nasjonale meningsmålinger om stortingsvalg»
+  caveats:
+    - Regnet ut for å fjerne den lange, langsomme trenden i nivåtallet før
+      det sammenlignes med noe annet. To serier som begge glir samme vei
+      over mange år vil korrelere på nivå uansett hva de måler; endringen
+      år for år er en strengere test.
+    - "Null med mindre både året og året før har et årssnitt basert på
+      tolv måneder, og året før faktisk *er* året før — ikke bare forrige
+      rad i tabellen. Et hull hopper aldri over seg selv og blir lest som
+      ett års endring."
+  breaks: []
+
+navn_preben_endring:
+  label: Endring i andel Preben-fødsler fra året før
+  model: mart.preben_trend
+  column: delta_andel_fodte_preben_pst
+  unit: prosentpoeng fra året før
+  source: SSB tabell 10467, «Fødte, etter jentenavn og guttenavn»
+  caveats:
+    - "Samme grunn som for meningsmaling_borgerlig_endring: fjerner den
+      lange trenden i Preben-andelen, som har falt mesteparten av
+      perioden 2008-2025, før den sammenlignes med noe annet."
+    - "Null med mindre både året og året før har et Preben-tall, og året
+      før faktisk er året før. Preben-tallet mangler for flere år etter
+      2017 — se navn_preben_andel — så endringer over disse hullene
+      regnes ikke ut, ikke engang som en flerårig endring."
+  breaks: []
