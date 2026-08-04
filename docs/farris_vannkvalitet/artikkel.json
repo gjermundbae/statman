@@ -1,0 +1,123 @@
+{
+  "schema": "statman/artikkel/1",
+  "slug": "farris_vannkvalitet",
+  "title": "Farrisvannet gjennom elleve somre: samme bølge, ingen trend",
+  "kicker": "Drikkevann · Vannmiljø, Vestfold Vann IKS",
+  "lead": "78 prøver fra 2011 til 2022 ved Vestfold Vann IKS' eget overvåkingspunkt i Farris tegner tre klare mønstre: vannfargen følger årstidene nesten identisk hvert år, bakterietallene hopper opp på samme tid av året igjen og igjen, og de årlige blågrønnalge-målingene svinger kraftig uten å flytte seg i noen bestemt retning over 15 år.",
+  "published": "2026-08-04",
+  "sections": [
+    {
+      "title": "Funn",
+      "blocks": [
+        {
+          "type": "stats",
+          "items": [
+            {
+              "value": "78",
+              "label": "Prøvedatoer",
+              "note": "2011-2022, april-november hvert år"
+            },
+            {
+              "value": "21-55",
+              "label": "Fargetall, spennet",
+              "note": "mg Pt/l, øverste meter"
+            },
+            {
+              "value": "2000",
+              "label": "Høyeste bakterietall",
+              "note": "koliforme bakterier per 100 ml, én enkelt dato"
+            },
+            {
+              "value": "22",
+              "label": "Årlige algemålinger",
+              "note": "to målepunkter, 2010-2025"
+            }
+          ]
+        },
+        {
+          "type": "findings",
+          "items": [
+            "**Vannfargen føler årstidene, ikke en langsiktig trend.** Hvert år tegner samme bølge: lysere (lavere fargetall) om sommeren, mørkere vår og høst — trolig humus og avrenning som følger nedbør og snøsmelting mer enn temperaturen alene. Elleve år lagt oppå hverandre viser akkurat den samme formen igjen og igjen, uten at noe år stikker klart av fra resten.",
+            "**Bakteriene ligger nesten alltid lavt, og hopper opp på samme tid av året.** Koliforme bakterier og E. coli i råvannet er stort sett enkeltsifret gjennom våren og tidlig sommer, men får gjentatte topper i august-oktober — mønsteret går igjen år etter år, ikke bare én sommer. Dette er råvann rett fra innsjøen; det sier ingenting om drikkevannet som faktisk kommer ut av springen, som renses og desinfiseres etter dette prøvepunktet.",
+            "**Blågrønnalgene svinger mye fra år til år, uten en tydelig retning opp eller ned.** Den årlige toppmålingen varierer nesten hundre ganger mellom det roligste og det verste året i disse dataene — men verken de siste årene eller de eldste dataene peker klart i én retning. Larvik kommune har omtalt blågrønnalger i Farris som et tilbakevendende fenomen siden slutten av 1980-tallet; disse tallene dekker bare 2010 og framover, og bekrefter svingningene uten å kunne si noe om utviklingen før den tid."
+          ]
+        },
+        {
+          "type": "figure",
+          "file": "sesongsyklus_farge.png",
+          "alt": "Linjediagram med én linje per år (2011-2022), fargetall i mg Pt/l langs x-aksen april til november.",
+          "caption": "Samme bølgeform gjentar seg år etter år: lysere sommer, mørkere vår og høst.",
+          "source": "Kilde: Vannmiljø — Vestfold Vann IKS, Bakkepollen i Farris.",
+          "width": "full"
+        },
+        {
+          "type": "figure",
+          "file": "bakterier_tidslinje.png",
+          "alt": "Stolpediagram (koliforme bakterier) og linje (E. coli) over hele perioden 2011-2022, logaritmisk akse.",
+          "caption": "Bakterietallene ligger nesten alltid lavt, og hopper opp sensommer og høst.",
+          "source": "Kilde: Vannmiljø — Vestfold Vann IKS, Bakkepollen i Farris.",
+          "width": "full"
+        },
+        {
+          "type": "figure",
+          "file": "algeblomst_aar.png",
+          "alt": "Grupperte stolper, cyanobakterier årlig maks 2010-2025, to målepunkter.",
+          "caption": "Store forskjeller fra år til år, uten en klar retning over 15 år.",
+          "source": "Kilde: Vannmiljø — Vestfold Vann IKS, Eikenesfjorden og Nesfjorden i Farris.",
+          "width": "full"
+        }
+      ]
+    },
+    {
+      "title": "Metode",
+      "blocks": [
+        {
+          "type": "findings",
+          "items": [
+            "Alle tall er hentet fra Vannmiljøs offentlige faktaark-eksport (`vannmiljofaktaark.miljodirektoratet.no`), som gir hver registrering Vestfold Vann IKS har meldt inn for sitt overvåkingsprogram i Farris — ikke et utvalg eller en oppsummering.",
+            "Farge, turbiditet og bakterietallene er fra ett målepunkt, Bakkepollen, og bare øverste meter av et fullt dypprofil ned til 60 meter som tas ved hver prøve. Cyanobakterie-tallene er fra to andre punkter, Eikenesfjorden og Nesfjorden, én årlig måling hver.",
+            "Denne saken tester ingen sammenheng og regner ikke ut noen korrelasjon — den viser fram tre mønstre som allerede ligger i tallene: en sesongsyklus, en årlig svingning, og fraværet av en tydelig langsiktig trend i begge.",
+            "Modellene `mart.farris_vannkvalitet_dato` og `mart.farris_algeblomst_aar`, bygget av statman 2026-08-04 16:29:17Z.",
+            "Dette startet som en mulighetsvurdering av fiskebestandsdata i Farris — de fantes ikke i noen brukbar form. Jakten på dem avdekket i stedet at drikkevannsovervåkingen er både åpen og maskinlesbar, og det er den denne saken bygger på."
+          ]
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "farris_fargetall",
+    "farris_turbiditet",
+    "farris_koliforme_bakterier",
+    "farris_e_coli",
+    "farris_cyanobakterier_aar"
+  ],
+  "provenance": {
+    "Kilde": "Miljødirektoratet, Vannmiljø — vannmiljofaktaark.miljodirektoratet.no",
+    "Oppdragsgiver (data)": "Vestfold Vann IKS",
+    "Vannlokaliteter": "015-88038 (Bakkepollen), 015-84635 (Eikenesfjorden), 015-84636 (Nesfjorden)",
+    "Modeller": "mart.farris_vannkvalitet_dato · mart.farris_algeblomst_aar",
+    "Bygget": "2026-08-04 16:29:17Z"
+  },
+  "files": [
+    [
+      "farris_vannkvalitet_vannkvalitet.csv",
+      "alle 78 prøvedatoer ved Bakkepollen, 2011-2022"
+    ],
+    [
+      "farris_vannkvalitet_algeblomst.csv",
+      "årlige cyanobakterie- og eutrofieringstall, 2010-2025"
+    ],
+    [
+      "sesongsyklus_farge.png",
+      "fargetall etter dag i året, én linje per år"
+    ],
+    [
+      "bakterier_tidslinje.png",
+      "koliforme bakterier og E. coli, hele perioden"
+    ],
+    [
+      "algeblomst_aar.png",
+      "årlig cyanobakterie-maks, to målepunkter"
+    ]
+  ]
+}

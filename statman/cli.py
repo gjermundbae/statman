@@ -172,6 +172,7 @@ EXAMPLES: dict[str, str] = {
     "preben": "examples.preben_borgerlig",
     "preben-trend": "examples.preben_meningsmalinger",
     "rente-bolig": "examples.rente_bolig",
+    "farris": "examples.farris_vannkvalitet",
 }
 
 

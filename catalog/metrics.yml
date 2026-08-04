@@ -328,3 +328,79 @@ boligprisvekst_kvartal:
       sakspakken for hvorfor, og «Følsomhet» for hvor mye valget av
       forskyvning betyr.
   breaks: []
+
+# --------------------------------------------------------------------------
+# Drikkevannskvalitet i Farrisvannet. Vestfold Vann IKS' eget
+# overvåkingsprogram via Vannmiljø — se statman/models/clean_vannmiljo.py
+# for hvilke av de 16 «Farris»-vannlokalitetene som faktisk brukes og
+# hvorfor. Rene tidsutviklinger, ingen sammenhenger regnet ut mellom dem.
+# --------------------------------------------------------------------------
+
+farris_fargetall:
+  label: Vannfarge (fargetall), Farris ved Bakkepollen
+  model: mart.farris_vannkvalitet_dato
+  column: fargetall_mg_pt_l
+  unit: mg Pt/l, øverste meter
+  source: Miljødirektoratet, Vannmiljø — Vestfold Vann IKS' overvåking av drikkevannskilden Farris
+  caveats:
+    - Kun øverste meter (1 m) av et fullt dypprofil ned til 60 m som tas ved
+      hver prøve. Dypere sjikt er jevnt lavere i fargetall og ligger urørt
+      i clean.vannmiljo_farris for den som vil se resten av profilen.
+    - Prøver tas bare april-november — innsjøen er ikke overvåket på denne
+      måten om vinteren. Linjer som krysser årsskiftet i grafene hopper
+      derfor over en periode uten data, ikke en jevn utvikling.
+    - Ett målepunkt (Bakkepollen) av flere i innsjøen. Ikke nødvendigvis
+      representativt for hele Farris.
+  breaks: []
+
+farris_turbiditet:
+  label: Turbiditet, Farris ved Bakkepollen
+  model: mart.farris_vannkvalitet_dato
+  column: turbiditet_fnu
+  unit: FNU, øverste meter
+  source: Miljødirektoratet, Vannmiljø — Vestfold Vann IKS' overvåking av drikkevannskilden Farris
+  caveats:
+    - Samme forbehold som farris_fargetall — øverste meter, april-november,
+      ett målepunkt.
+  breaks: []
+
+farris_koliforme_bakterier:
+  label: Koliforme bakterier, Farris ved Bakkepollen
+  model: mart.farris_vannkvalitet_dato
+  column: koliforme_bakterier_per_100ml
+  unit: antall/100 ml, øverste meter
+  source: Miljødirektoratet, Vannmiljø — Vestfold Vann IKS' overvåking av drikkevannskilden Farris
+  caveats:
+    - Dette er råvann rett fra innsjøen, ikke drikkevannet som når springen
+      — det skal desinfiseres og renses etter denne prøvetakingen, ikke
+      etter den.
+    - Samme forbehold som farris_fargetall — øverste meter, april-november,
+      ett målepunkt.
+  breaks: []
+
+farris_e_coli:
+  label: E. coli, Farris ved Bakkepollen
+  model: mart.farris_vannkvalitet_dato
+  column: e_coli_per_100ml
+  unit: antall/100 ml, øverste meter
+  source: Miljødirektoratet, Vannmiljø — Vestfold Vann IKS' overvåking av drikkevannskilden Farris
+  caveats:
+    - Samme forbehold som farris_koliforme_bakterier — dette er råvann, ikke
+      ferdig renset drikkevann.
+  breaks: []
+
+farris_cyanobakterier_aar:
+  label: Cyanobakterier (blågrønnalger), årlig maks
+  model: mart.farris_algeblomst_aar
+  column: cyano_maks_mg_l
+  unit: mg/l biomasse, årlig maksmåling
+  source: Miljødirektoratet, Vannmiljø — Vestfold Vann IKS' overvåking av Farris, to målepunkter (Eikenesfjorden og Nesfjorden)
+  caveats:
+    - Én måling i året (nominelt 1. august), ikke et sesongmaks funnet ved
+      hyppig prøvetaking. Et faktisk maksimum midtsommers kan være høyere
+      eller lavere enn denne ene prøven fanger opp.
+    - Flere år mangler måling helt (blant annet 2011, 2015, 2018, 2019 ved
+      Eikenesfjorden) — se hull i tidslinjen som manglende data, ikke null.
+    - Ingen offisiell grenseverdi er lagt inn eller vurdert her — tallene
+      vises som de er, ikke klassifisert som "høy"/"lav" risiko.
+  breaks: []
