@@ -1,0 +1,184 @@
+{
+  "schema": "statman/artikkel/1",
+  "slug": "rente_bolig",
+  "title": "Renta og boligprisene: nivået lyver, den forsinkede endringen holder stikk",
+  "kicker": "Rente og bolig · Norges Bank og SSB tabell 07221",
+  "lead": "Styringsrenten mot boligprisindeksen samme kvartal ser ut som en sterk sammenheng: r = -0,59 over 138 kvartal siden 1992. Det er nesten bare delt, tiår-lang trend. Ser man i stedet på hvordan boligprisveksten endrer seg etter at renta endres, blir sammenhengen svakere — men den forsvinner ikke: r = -0,34 med 1 kvartals forsinkelse (n = 85, p 0,001).",
+  "published": "2026-08-04",
+  "sections": [
+    {
+      "title": "Funn",
+      "blocks": [
+        {
+          "type": "stats",
+          "items": [
+            {
+              "value": "-0,59",
+              "label": "Korrelasjon på nivå",
+              "note": "n = 138 kvartal, 1992-2026"
+            },
+            {
+              "value": "< 0,001",
+              "label": "Ser sterkt signifikant ut",
+              "note": "men se endringstallet under"
+            },
+            {
+              "value": "-0,34",
+              "label": "Korrelasjon, 1 kvartal forskjøvet",
+              "note": "n = 85 kvartal, 2005-2026"
+            },
+            {
+              "value": "0,001",
+              "label": "Statistisk signifikant",
+              "note": "tosidig t-test, H0: r = 0"
+            }
+          ]
+        },
+        {
+          "type": "findings",
+          "items": [
+            "Målt på **nivå** — styringsrenten og boligprisindeksen samme kvartal, hele perioden 1992-2026 — er korrelasjonen r = -0,59 (n = 138 kvartal, p < 0,001). Det ser overbevisende ut, og det er nettopp problemet: renta har falt fra ni-ti prosent til null over disse tiårene mens boligprisene har mangedoblet seg, og to serier som deler én lang retning korrelerer sterkt på nivå uansett hvor mye de faktisk henger sammen fra kvartal til kvartal.",
+            "Målt på **endring** — hvor mye endrer boligprisveksten (sesongjustert) seg etter at renta endres, 1 kvartal senere — er korrelasjonen r = -0,34 (n = 85 kvartal, 2005-2026, p 0,001). Svakere enn nivåtallet, som forventet når den delte trenden er fjernet, men i motsetning til Preben-sakene forsvinner den ikke: den er moderat, i forventet retning, og statistisk signifikant på vanlig nivå.",
+            "Retningen er den man skulle vente: en renteøkning henger sammen med lavere boligprisvekst kvartalet(-ene) etter, ikke samme kvartal. Se «Følsomhet» for hvor fort sammenhengen dør ut med lengre forskyvning, og «Metode» for hvorfor det fortsatt ikke beviser at renta er årsaken."
+          ]
+        },
+        {
+          "type": "figure",
+          "file": "tidsserie.png",
+          "alt": "Linjediagram med to akser: boligprisindeksen (ujustert) til venstre, styringsrenten til høyre, kvartalsvis 1992-2026.",
+          "caption": "Begge serier har beveget seg i tiår-lange buer. Det er denne delte, langsomme bevegelsen som gir den sterke, men misvisende nivåkorrelasjonen under.",
+          "source": "Kilde: SSB tabell 07221 og Norges Bank, IR/B.KPRA.SD.",
+          "width": "full"
+        },
+        {
+          "type": "figure",
+          "file": "niva_vs_endring.png",
+          "alt": "To punktdiagrammer side ved side: nivå til venstre over hele perioden, endring med forskyvning til høyre.",
+          "caption": "Samme to variabler, to spørsmål. Til venstre nivået, som lyver. Til høyre endringen med forskyvning, som holder — svakere, men ekte.",
+          "source": "Kilde: SSB tabell 07221 og Norges Bank, IR/B.KPRA.SD.",
+          "width": "full"
+        }
+      ]
+    },
+    {
+      "title": "Følsomhet",
+      "blocks": [
+        {
+          "type": "findings",
+          "items": [
+            "Tabellen under gjentar endringstallet over med andre forskyvninger — ikke fordi noen av dem er en bedre hypotese, men for å se om sammenhengen er robust eller bare var den forskyvningen som tilfeldigvis ga høyest tall.",
+            "Mønsteret er som forventet fra hvordan pengepolitikk faktisk virker: sammenhengen er svakest samme kvartal, sterkest ved én til to kvartals forsinkelse, og avtar mot null etter fire-fem kvartal. Det er ikke tilfeldig støy uten struktur, slik forskyvningstabellen i Preben-sakene var — det er en form som ligner en reell, forsinket transmisjon.",
+            "Sammenhengen ved 1-2 kvartals forskyvning holder seg også — svekket til r ≈ -0,29 til -0,32, fortsatt signifikant — om koronakvartalene 2020-2021 tas helt ut av utvalget. Den er altså ikke bare ett enkelt sjokk som drar tallet."
+          ]
+        },
+        {
+          "type": "table",
+          "columns": [
+            "Forskyvning",
+            "Antall kvartal",
+            "r",
+            "p"
+          ],
+          "rows": [
+            [
+              "0 (samme kvartal)",
+              "85",
+              "-0,03",
+              "0,776"
+            ],
+            [
+              "1 kvartal",
+              "85",
+              "-0,34",
+              "0,001"
+            ],
+            [
+              "2 kvartal",
+              "84",
+              "-0,34",
+              "0,001"
+            ],
+            [
+              "3 kvartal",
+              "83",
+              "-0,27",
+              "0,013"
+            ],
+            [
+              "4 kvartal",
+              "82",
+              "-0,17",
+              "0,125"
+            ],
+            [
+              "6 kvartal",
+              "80",
+              "-0,06",
+              "0,615"
+            ],
+            [
+              "8 kvartal",
+              "78",
+              "-0,09",
+              "0,431"
+            ]
+          ],
+          "align": [
+            "left",
+            "right",
+            "right",
+            "right"
+          ],
+          "caption": "0 kvartal = renteendring og boligprisvekst samme kvartal. Alle tall er fra den sesongjusterte perioden, 2005-2026."
+        }
+      ]
+    },
+    {
+      "title": "Metode",
+      "blocks": [
+        {
+          "type": "findings",
+          "items": [
+            "Rentetall: Norges Bank, dataserie IR/B.KPRA.SD (styringsrenten), hentet 2026-08-04T00:34:53Z, sha256 53f9dffe7773….",
+            "Boligtall: SSB tabell 07221, «07221: Prisindeks for brukte boliger, etter region, boligtype og kvartal». Oppdatert 2026-07-10, hentet 2026-08-04T00:34:54Z, sha256 ef9bdc3dd343….",
+            "Styringsrenten er notert per virkedag og regnet om til kvartalssnitt her; boligprisindeksen er allerede kvartalsvis fra SSB. Endringstallet bruker den sesongjusterte indeksvarianten, som først finnes fra 2005K1 — elleve år kortere enn rentetallet, og grunnen til at endringsanalysen dekker et kortere tidsrom enn nivågrafen.",
+            "Modellene `mart.rente_kvartal`, `mart.boligpris_kvartal` og `mart.rente_bolig_kvartal`, bygget av statman 2026-08-04 00:34:54Z.",
+            "Verken p-verdien eller forskyvningsmønsteret over beviser at styringsrenten *forårsaker* endringen i boligprisveksten. Norges Bank setter renten blant annet ut fra egne vurderinger av boligmarkedet og presset i økonomien for øvrig, så noe av sammenhengen kan gå motsatt vei eller gjennom en tredje faktor — inflasjon, kronekurs, kredittpraksis i bankene, boligbygging. To tidsserier kan ikke skille en slik forklaring fra en direkte effekt; det krever en modell med flere variabler, som denne saken ikke bygger.",
+            "Landstallet skjuler dessuten store regionale forskjeller — Oslo har for eksempel beveget seg annerledes enn resten av landet i flere av disse rentesyklusene. Det er utenfor denne saken, men et åpent spørsmål for en senere en."
+          ]
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "styringsrente",
+    "boligprisindeks",
+    "boligprisindeks_sesongjustert",
+    "styringsrente_endring_kvartal",
+    "boligprisvekst_kvartal"
+  ],
+  "provenance": {
+    "Rentekilde": "Norges Bank — dataserie IR/B.KPRA.SD (styringsrenten)",
+    "Boligkilde": "SSB tabell 07221 — 07221: Prisindeks for brukte boliger, etter region, boligtype og kvartal",
+    "Hentet (rente)": "2026-08-04T00:34:53Z",
+    "Hentet (bolig)": "2026-08-04T00:34:54Z",
+    "sha256 (rente)": "53f9dffe77737be229dc84c83ca6fba6a7c9af139e3c82a54f3c13b5b7feb0ce",
+    "sha256 (bolig)": "ef9bdc3dd343686eeb1a168b14094c3a5f5c3cafa404dfe30b6f2749597e7e88",
+    "Modeller": "mart.rente_kvartal · mart.boligpris_kvartal · mart.rente_bolig_kvartal",
+    "Bygget": "2026-08-04 00:34:54Z"
+  },
+  "files": [
+    [
+      "rente_bolig.csv",
+      "alle kvartal 1991-2026, nivå og endring"
+    ],
+    [
+      "tidsserie.png",
+      "boligprisindeks og styringsrente, hele perioden"
+    ],
+    [
+      "niva_vs_endring.png",
+      "nivå og forskjøvet endring side ved side"
+    ]
+  ]
+}

@@ -171,6 +171,7 @@ EXAMPLES: dict[str, str] = {
     "befolkning": "examples.befolkningsvekst",
     "preben": "examples.preben_borgerlig",
     "preben-trend": "examples.preben_meningsmalinger",
+    "rente-bolig": "examples.rente_bolig",
 }
 
 

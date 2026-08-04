@@ -251,3 +251,80 @@ navn_preben_endring:
       2017 — se navn_preben_andel — så endringer over disse hullene
       regnes ikke ut, ikke engang som en flerårig endring."
   breaks: []
+
+# --------------------------------------------------------------------------
+# Styringsrenten mot boligprisene. Nivåkorrelasjonen over hele perioden er
+# drevet av at begge serier har beveget seg i tiår-lange buer siden 1992 —
+# se mart_rente_bolig.py. Endringstallet er strengere: hvor mye endrer
+# boligprisveksten seg etter at renta faktisk endres.
+# --------------------------------------------------------------------------
+
+styringsrente:
+  label: Styringsrenten, kvartalssnitt
+  model: mart.rente_bolig_kvartal
+  column: rente_snitt_pst
+  unit: prosent p.a., snitt av virkedagsnoteringer i kvartalet
+  source: Norges Bank, dataserie IR/B.KPRA.SD (styringsrenten)
+  caveats:
+    - Kvartalssnitt av virkedagsnoteringer ved dagens slutt, ikke et snitt
+      av kalenderdager. Renten er identisk hver dag mellom rentemøtene, så
+      snittet flytter seg bare når Norges Bank faktisk endrer den.
+    - Styringsrenten er ikke en variabel som beveger seg uavhengig av
+      boligmarkedet den sammenlignes med her. Norges Bank setter renten
+      blant annet ut fra egne vurderinger av presset i boligmarkedet, så en
+      sammenheng kan gå begge veier.
+  breaks: []
+
+boligprisindeks:
+  label: Prisindeks for brukte boliger, hele landet
+  model: mart.rente_bolig_kvartal
+  column: boligindeks
+  unit: indeks, 2015=100
+  source: SSB tabell 07221, «Prisindeks for brukte boliger, etter boligtype og region»
+  caveats:
+    - Landsgjennomsnitt for alle boligtyper samlet. Skjuler betydelige
+      regionale forskjeller — samme tabell hos SSB har indeksen brutt ned på
+      elleve regioner, som denne saken ikke bruker.
+    - Ikke sesongjustert. Brukes bare til nivåbildet over hele perioden
+      1992-2026; endringstallet under bruker den sesongjusterte varianten,
+      som ikke finnes like langt tilbake.
+  breaks: []
+
+boligprisindeks_sesongjustert:
+  label: Prisindeks for brukte boliger, sesongjustert
+  model: mart.rente_bolig_kvartal
+  column: boligindeks_sesjustert
+  unit: indeks, 2015=100, sesongjustert
+  source: SSB tabell 07221, «Prisindeks for brukte boliger, etter boligtype og region»
+  caveats:
+    - Finnes bare fra 2005K1, elleve år kortere enn styringsrenteserien.
+      Endringsanalysen dekker derfor 2005-2026, ikke hele perioden
+      nivåtallet viser.
+    - SSBs egen sesongjustering, ikke etterprøvd eller regnet om av oss.
+  breaks: []
+
+styringsrente_endring_kvartal:
+  label: Endring i styringsrenten fra forrige kvartal
+  model: mart.rente_bolig_kvartal
+  column: delta_rente_pp
+  unit: prosentpoeng fra forrige kvartal
+  source: Norges Bank, dataserie IR/B.KPRA.SD (styringsrenten)
+  caveats:
+    - Null med mindre forrige rad faktisk er forrige kvartal, ikke bare
+      forrige rad i tabellen — se navn_preben_endring for samme prinsipp.
+      Det finnes ikke noe hull i denne serien i dag, men sjekken er der.
+  breaks: []
+
+boligprisvekst_kvartal:
+  label: Boligprisvekst fra forrige kvartal, sesongjustert
+  model: mart.rente_bolig_kvartal
+  column: endring_bolig_kvartal_pst
+  unit: andel (0.014 = 1,4 %) fra forrige kvartal
+  source: SSB tabell 07221, «Prisindeks for brukte boliger, etter boligtype og region»
+  caveats:
+    - Regnet ut av oss fra den sesongjusterte indeksen, ikke hentet ferdig.
+    - Sammenlignes i denne saken med endringen i styringsrenten ett eller
+      flere kvartal tidligere, ikke samme kvartal — se «Metode» i
+      sakspakken for hvorfor, og «Følsomhet» for hvor mye valget av
+      forskyvning betyr.
+  breaks: []
