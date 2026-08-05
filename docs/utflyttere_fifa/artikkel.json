@@ -3,7 +3,7 @@
   "slug": "utflyttere_fifa",
   "title": "De får ikke lenger heie på Norge — men gjorde de et godt bytte?",
   "kicker": "Satire · Skatteutflyttere mot FIFA-rankingen",
-  "lead": "En utflytter mister retten til å heie på Norge og må heie på sitt nye hjemland i stedet. Vi lot FIFA/Coca-Cola Men's World Ranking avgjøre om det var et godt bytte: Norges plassering minus det nye landets. Fasit: 3 rykket opp, 1 rykket rått og brutalt ned.",
+  "lead": "En utflytter mister retten til å heie på Norge og må heie på sitt nye hjemland i stedet. Vi lot FIFA/Coca-Cola Men's World Ranking avgjøre om det var et godt bytte: Norges plassering minus det nye landets. Fasit: 3 rykket opp, 2 rykket rått og brutalt ned.",
   "published": "2026-08-05",
   "sections": [
     {
@@ -23,7 +23,7 @@
               "note": "nytt hjemland bedre plassert enn Norge"
             },
             {
-              "value": "1",
+              "value": "2",
               "label": "Rykket ned",
               "note": "nytt hjemland dårligere plassert enn Norge"
             }
@@ -48,6 +48,7 @@
             "**Kristian Siem** → England (London, 1999): Styreleder i Subsea 7 og Siem Industries, bosatt i London i over 25 år. Kilde: Wikipedia (engelsk).",
             "**Kjell Inge Røkke** → Sveits (Lugano, 2022): Meldte flytting til Lugano i Sveits i 2022, med 17,8 milliarder kroner i skattbar formue. Kilde: NRK.",
             "**Ole Andreas Halvorsen** → USA (Greenwich/Darien, Connecticut, 1990): Grunnlegger og sjef for hedgefondet Viking Global Investors, bosatt i Connecticut. Kilde: Wikipedia (engelsk).",
+            "**Isabel Raad** → De forente arabiske emirater (Dubai, 2023): Influenser og gründer (Ivorie Studio, Nude Beauty), bosatt i Dubai siden 2023. Har kjøpt luksusvilla der for 43 millioner kroner. Kilde: TV2.",
             "**John Fredriksen** → Kypros (Limassol, 2006): Utvandret fra Norge i 1978 og har ikke betalt skatt hit siden. Ble kypriotisk statsborger i 2006. Kilde: Store norske leksikon."
           ]
         }
@@ -61,7 +62,7 @@
     "Kilde, FIFA-ranking": "inside.fifa.com/fifa-rankings/world-ranking/men, gjeldende fra 20. juli 2026",
     "Kilde, utflytterroster": "Se kildehenvisning per person i «Hvem, hvor, og hvorfor de teller med»",
     "Modell": "mart.utflyttere_fifa",
-    "Bygget": "2026-08-05 12:08:06Z"
+    "Bygget": "2026-08-05 12:32:03Z"
   },
   "files": [
     [

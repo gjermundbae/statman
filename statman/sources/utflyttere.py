@@ -69,6 +69,16 @@ ROSTER: Final[tuple[dict[str, object], ...]] = (
         "kilde_navn": "Wikipedia (engelsk)",
         "kilde_url": "https://en.wikipedia.org/wiki/Ole_Andreas_Halvorsen",
     },
+    {
+        "navn": "Isabel Raad",
+        "fifa_kode": "UAE",
+        "land_navn": "De forente arabiske emirater",
+        "sted": "Dubai",
+        "flyttet_aar": 2023,
+        "notat": "Influenser og gründer (Ivorie Studio, Nude Beauty), bosatt i Dubai siden 2023. Har kjøpt luksusvilla der for 43 millioner kroner.",
+        "kilde_navn": "TV2",
+        "kilde_url": "https://www.tv2.no/underholdning/skatteregningen-barbert-etter-dubai-flytting/18340146/",
+    },
 )
 
 

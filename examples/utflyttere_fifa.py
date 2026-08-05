@@ -45,6 +45,14 @@ _FLAGG: Final[dict[str, tuple[str, str, str]]] = {
     "CYP": ("#ffffff", "#d57800", "#4e7a25"),
     "ENG": ("#ffffff", "#ce1124", "#ffffff"),
     "USA": ("#b22234", "#ffffff", "#3c3b6e"),
+    "UAE": ("#ce1126", "#00732f", "#000000"),
+}
+
+# Kortere visningsnavn for ruta i kortet, der det formelle landnavnet er for
+# langt til å få plass på én linje. Prosa og kilder bruker fortsatt
+# ``land_navn`` uavkortet.
+_KORTNAVN: Final[dict[str, str]] = {
+    "De forente arabiske emirater": "Emiratene",
 }
 
 _GRONN: Final[str] = "#1f6f4a"
@@ -113,6 +121,12 @@ def _ansikt(fx: float, fy: float, r: float, *, glad: bool) -> str:
     return "".join(deler)
 
 
+def _rutestorrelse(land_navn: str) -> int:
+    """Skriftstørrelse for Norge->land-linja — krymper for lange landnavn."""
+    tekst = _KORTNAVN.get(land_navn, land_navn)
+    return 13 if len(tekst) <= 12 else 11
+
+
 def _kort(x: float, row: dict, *, index: int) -> str:
     w, h = 258.0, 460.0
     glad = bool(row["rykket_opp"])
@@ -144,8 +158,8 @@ def _kort(x: float, row: dict, *, index: int) -> str:
   <text x="{w / 2}" y="262" text-anchor="middle" font-size="13" fill="{_DEMPET}"
         font-style="italic">{_esc(row['sted'])}, {row['flyttet_aar']}</text>
   <line x1="24" y1="284" x2="{w - 24}" y2="284" stroke="{_STREK}"/>
-  <text x="{w / 2}" y="308" text-anchor="middle" font-size="13" fill="{_DEMPET}">
-    Norge (#{row['norge_rangering']}) &#8594; {_esc(row['land_navn'])} (#{row['land_rangering']})
+  <text x="{w / 2}" y="308" text-anchor="middle" font-size="{_rutestorrelse(row['land_navn'])}" fill="{_DEMPET}">
+    Norge (#{row['norge_rangering']}) &#8594; {_esc(_KORTNAVN.get(row['land_navn'], row['land_navn']))} (#{row['land_rangering']})
   </text>
   <text x="{w / 2}" y="372" text-anchor="middle" font-weight="800" font-size="56"
         fill="{farge}">{diff_tekst}</text>
