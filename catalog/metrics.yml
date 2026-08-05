@@ -389,6 +389,35 @@ farris_e_coli:
       ferdig renset drikkevann.
   breaks: []
 
+# --------------------------------------------------------------------------
+# Satire: norske skatteutflyttere mot FIFA/Coca-Cola Men's World Ranking.
+# Se statman/models/mart_utflyttere_fifa.py for differansedefinisjonen.
+# --------------------------------------------------------------------------
+
+utflyttere_fifa_differanse:
+  label: FIFA-plassdifferanse, nytt land minus Norge
+  model: mart.utflyttere_fifa
+  column: differanse
+  unit: plasser (positivt = nytt land bedre plassert enn Norge)
+  source: FIFA/Coca-Cola Men's World Ranking, gjeldende fra 20. juli 2026 — se statman/sources/fifa.py
+  caveats:
+    - "Dette er satire. FIFA-rangeringen sier ingenting om hvor bra det er å
+      bo et sted, og differansen her måler ingenting annet enn to tall på en
+      liste samme dag."
+    - "Rangeringen er et øyeblikksbilde, ikke en trend: gjeldende fra 20. juli
+      2026, uendret til neste offisielle oppdatering 7. oktober 2026. En
+      utflytter rangeres ikke om av kamper spilt etter det, eller av hvor
+      lenge de faktisk har bodd i det nye landet."
+    - "Landet er identifisert ved FIFA-medlemskap, ikke ved skattemessig
+      bosted. England har egen FIFA-rangering adskilt fra resten av
+      Storbritannia; det gjør ingen forskjell for den skattemessige
+      vurderingen, bare for hvilket lag som telles."
+    - "Firemannsutvalget er ikke en fullstendig liste over norske
+      skatteutflyttere, bare fire navngitte, dokumenterte tilfeller — ett
+      land per person. Se kilde_url i mart.utflyttere_fifa for hver enkelt."
+  breaks: []
+
+# --------------------------------------------------------------------------
 farris_cyanobakterier_aar:
   label: Cyanobakterier (blågrønnalger), årlig maks
   model: mart.farris_algeblomst_aar
