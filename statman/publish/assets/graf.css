@@ -1,0 +1,183 @@
+/* Statman — figurer som tegnes i sida.
+
+   Fargene her er datakodning, ikke merkevare. --aksent er fortsatt grønn og
+   brukes til lenker og seksjonsnummer; --vekst er en annen grønn, valgt fordi
+   den skal kunne skilles fra --fall av en leser som ikke ser rødt.
+
+   Verdiene er kjørt gjennom fargeblindhetssjekken (Machado-Oliveira-Fernandes,
+   ΔE i OKLab×100) mot papirflaten i hver modus. Mørk modus er *valgt*, ikke en
+   lysning av lysmodus — å bare lysne verdiene feilet tre av seks sjekker.
+
+     lys   vekst/fall   ΔE 11,2 (deutan)      mørk   ΔE 13,2 (deutan)
+     lys   kat1/kat2    ΔE 21,1 (protan)      mørk   ΔE 21,0 (protan)
+
+   Bytter du en av dem, kjør sjekken på nytt. Ikke se på dem. */
+:root {
+  --vekst: #2a9d5c;
+  --fall: #a33b32;
+  --kat1: #2b6ca3;
+  --kat2: #c07a2b;
+  --kat3: #6a4f9c;
+  --kat4: #1c7e86;
+  --noytral: #8b857c;
+  --rutenett: #ece7dd;
+  --dis: #c9c3b8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --vekst: #46ab7d;
+    --fall: #b34437;
+    --kat1: #4f9bd4;
+    --kat2: #bf863a;
+    --kat3: #9b83c9;
+    --kat4: #3f9aa2;
+    --noytral: #7d766b;
+    --rutenett: #242219;
+    --dis: #413d35;
+  }
+}
+
+/* Panelet og tegnforklaringen settes inn av skriptet, som søsken til figuren.
+   Uten dette ville de klemt seg inn i tekstspennet mens figuren står bredt. */
+@supports (grid-template-columns: subgrid) {
+  .ark > section > .graf-styring.bred,
+  .ark > section > .graf-tegn.bred { grid-column: wide; }
+  .ark > section > .graf-styring.full,
+  .ark > section > .graf-tegn.full { grid-column: full; }
+}
+
+/* ------------------------------------------------------------- styrepanel */
+.graf-styring {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.9rem 1.1rem;
+  margin: 0 0 1.4rem;
+  padding: 1rem 1.15rem;
+  background: var(--flate);
+  border: 1px solid var(--strek);
+  border-radius: var(--runding);
+}
+.graf-styring label {
+  display: block;
+  font: 600 0.68rem/1.4 var(--sans);
+  letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--svak);
+  margin-bottom: 0.35rem;
+}
+.graf-styring select {
+  font: inherit; font-size: 0.92rem;
+  padding: 0.42rem 2rem 0.42rem 0.6rem;
+  color: var(--blekk);
+  background: var(--papir);
+  border: 1px solid var(--strek-mork);
+  border-radius: 6px;
+  min-width: 13rem;
+  appearance: none; cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 1.05rem center, right 0.8rem center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.graf-styring select:focus-visible { outline: 2px solid var(--aksent); outline-offset: 1px; }
+.graf-styring button {
+  font: inherit; font-size: 0.85rem;
+  padding: 0.42rem 0.85rem;
+  cursor: pointer;
+  color: var(--dempet);
+  background: transparent;
+  border: 1px solid var(--strek-mork);
+  border-radius: 6px;
+}
+.graf-styring button:hover { color: var(--aksent); border-color: var(--aksent); }
+
+/* ---------------------------------------------------------------- figuren */
+.figur.graf .graf-flate { position: relative; }
+.figur.graf img {
+  display: block; width: 100%; height: auto;
+  border: 1px solid var(--strek);
+  border-radius: var(--runding);
+  background: #fff;
+  box-shadow: var(--skygge);
+}
+/* Når skriptet har tegnet, er PNG-en byttet ut og rammen hører til SVG-en
+   i stedet — den skal ikke ha kortbakgrunn, for den *er* sida. */
+.figur.graf.tegnet .graf-flate { border: 0; box-shadow: none; background: none; }
+.figur.graf svg { display: block; width: 100%; height: auto; overflow: visible; }
+.figur.graf svg text { font-family: var(--sans); fill: var(--dempet); }
+
+.rute { stroke: var(--rutenett); stroke-width: 1; }
+.null-linje { stroke: var(--strek-mork); stroke-width: 1; }
+.merketall { font-size: 11px; fill: var(--svak); font-variant-numeric: tabular-nums; }
+.aksetittel { font-size: 12px; fill: var(--dempet); font-weight: 600; }
+.radnavn { font-size: 12.5px; fill: var(--blekk); }
+.radtall { font-size: 12.5px; font-weight: 650; fill: var(--blekk); font-variant-numeric: tabular-nums; }
+
+.etikett {
+  font-size: 11.5px; font-weight: 600; fill: var(--blekk);
+  paint-order: stroke; stroke: var(--papir); stroke-width: 3.5px; stroke-linejoin: round;
+}
+.svak-etikett {
+  font-size: 11px; fill: var(--svak);
+  paint-order: stroke; stroke: var(--papir); stroke-width: 3px; stroke-linejoin: round;
+}
+
+.merke, .tikk, .bolk { transition: opacity 180ms ease; }
+.dempet .merke:not(.valgt):not(.i-gruppe) { opacity: 0.18; }
+.dempet .tikk:not(.valgt):not(.i-gruppe) { opacity: 0.28; }
+.valgt-ring { fill: none; stroke: var(--blekk); stroke-width: 2; }
+
+/* Tegnforklaringen er alltid der når figuren har mer enn én farge.
+   Identitet kodes aldri med farge alene. */
+.graf-tegn {
+  display: flex; flex-wrap: wrap; gap: 0.35rem 1.2rem;
+  margin: 0 0 0.8rem;
+  font-size: 0.8rem; color: var(--dempet);
+}
+.graf-tegn span { display: inline-flex; align-items: center; gap: 0.45rem; }
+.graf-tegn i { width: 12px; height: 9px; border-radius: 2px; flex: none; }
+
+/* -------------------------------------------------------------------- boblen */
+/* Verdien leder, navnet følger — motsatt av tegnforklaringen, fordi leseren
+   her allerede vet hvilket merke hen peker på og vil ha tallet. */
+.graf-boble {
+  position: absolute; z-index: 5; pointer-events: none; opacity: 0;
+  transform: translate(-50%, calc(-100% - 14px));
+  min-width: 11rem; max-width: 16rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--flate);
+  border: 1px solid var(--strek-mork);
+  border-radius: 8px;
+  box-shadow: var(--skygge);
+  font-size: 0.82rem; line-height: 1.45;
+  transition: opacity 120ms ease;
+}
+.graf-boble.pa { opacity: 1; }
+.graf-boble .navn {
+  font-family: var(--serif); font-size: 1.02rem; font-weight: 600;
+  color: var(--blekk); line-height: 1.2;
+}
+.graf-boble .sted {
+  display: block; margin-bottom: 0.5rem;
+  font-size: 0.74rem; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--svak);
+}
+.graf-boble dl {
+  display: grid; grid-template-columns: 1fr auto; gap: 0.12rem 0.8rem;
+  margin: 0; padding-top: 0.45rem;
+  border-top: 1px solid var(--strek);
+}
+.graf-boble dt { color: var(--dempet); display: flex; align-items: center; gap: 0.4rem; }
+/* Strek, ikke rute: en fylt boks er dataflate-blekk som gjør en etikettjobb. */
+.graf-boble dt::before {
+  content: ""; width: 9px; height: 2px; border-radius: 1px;
+  background: var(--nokkel, var(--dis)); flex: none;
+}
+.graf-boble dd {
+  margin: 0; text-align: right; font-weight: 650;
+  color: var(--blekk); font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  .graf-styring { display: none; }
+  .figur.graf.tegnet .graf-flate { border: 0; }
+}

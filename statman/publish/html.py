@@ -12,12 +12,14 @@ til gjengjeld tydelig.
 from __future__ import annotations
 
 import html as _html
+import json
 import re
 from pathlib import Path
 
 from statman import catalog as catalog_mod
 from statman.publish.article import (
     Article,
+    Chart,
     Figure,
     Findings,
     Prose,
@@ -92,6 +94,51 @@ def _figur(block: Figure) -> str:
     )
 
 
+def _graf(block: Chart) -> str:
+    """En tegnet figur, med PNG-en stående til skriptet har overtatt.
+
+    Spesifikasjonen legges i et data-attributt framfor et ``<script>``: den er
+    escapet av :func:`esc` og kan derfor ikke bryte ut av attributtet, uansett
+    hva et kommunenavn skulle inneholde. Uten JavaScript skjer ingenting, og
+    da er PNG-en figuren — akkurat som før.
+    """
+    bredde = block.width if block.width in {"tekst", "bred", "full"} else "bred"
+    spek = json.dumps(block.spec(), ensure_ascii=False, separators=(",", ":"))
+    tekst = ""
+    if block.caption or block.source:
+        kilde = f'<span class="kilde">{inline(block.source)}</span>' if block.source else ""
+        tekst = f"<figcaption>{inline(block.caption)}{kilde}</figcaption>"
+    bilde = (
+        f'<img src="{esc(block.fallback)}" alt="{esc(block.alt)}" '
+        'loading="lazy" decoding="async">'
+    )
+    # PNG-en ligger i <noscript>, ikke i dokumentet. Ellers ville hver leser
+    # lastet ned en figur skriptet river ut et øyeblikk etterpå — og for denne
+    # saken er det halvannen megabyte ingen ser. Skriptet setter den inn selv
+    # om det ikke får tegnet, så en figur står der uansett hva som feiler.
+    return (
+        f'<figure class="figur graf {bredde} avslor" '
+        f'data-fallback="{esc(block.fallback)}" data-alt="{esc(block.alt)}">'
+        f'<script type="application/json" class="graf-spek">{_json_i_script(spek)}</script>'
+        f'<div class="graf-flate"><noscript>{bilde}</noscript></div>'
+        f"{tekst}</figure>"
+    )
+
+
+def _json_i_script(spek: str) -> str:
+    """JSON trygt inni ``<script type="application/json">``.
+
+    Et script-element er rå tekst: nettleseren tolker ingen entiteter, men
+    avslutter elementet på det første ``</``. Vi rømmer derfor ``<`` som
+    ``\\u003c`` — lovlig JSON, og da *kan* ikke innholdet lukke elementet,
+    uansett hva et kommunenavn måtte inneholde.
+
+    Attributt hadde også vært trygt, men koster tre tegn per hermetegn.
+    Med en sky på 323 kommuner er det et par hundre kilobyte for ingenting.
+    """
+    return spek.replace("<", "\\u003c")
+
+
 def _tabell(block: Table) -> str:
     just = block.alignment()
     hode = "".join(
@@ -130,6 +177,8 @@ def _block(block: object) -> str:
         return _stats(block)
     if isinstance(block, Figure):
         return _figur(block)
+    if isinstance(block, Chart):
+        return _graf(block)
     if isinstance(block, Table):
         return _tabell(block)
     raise TypeError(f"Vet ikke hvordan {type(block).__name__} skrives som HTML")
@@ -205,7 +254,10 @@ _FAVICON = (
 )
 
 
-def _dokument(*, tittel: str, beskrivelse: str, kropp: str) -> str:
+def _dokument(*, tittel: str, beskrivelse: str, kropp: str, graf: bool = False) -> str:
+    """Hele dokumentet. Figurlaget følger bare med når sida har en figur."""
+    stil = asset("statman.css") + (asset("graf.css") if graf else "")
+    skript = asset("statman.js") + (asset("graf.js") if graf else "")
     return f"""<!doctype html>
 <html lang="nb">
 <head>
@@ -217,13 +269,13 @@ def _dokument(*, tittel: str, beskrivelse: str, kropp: str) -> str:
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="{_FAVICON}">
 <style>
-{asset("statman.css")}</style>
+{stil}</style>
 </head>
 <body>
 <div class="fremdrift" id="fremdrift"></div>
 {kropp}
 <script>
-{asset("statman.js")}</script>
+{skript}</script>
 </body>
 </html>
 """
@@ -260,7 +312,12 @@ def render(article: Article, *, hjem: str | None = "../index.html") -> str:
         + _kvittering(article.provenance)
         + "</article>"
     )
-    return _dokument(tittel=article.title, beskrivelse=article.lead, kropp=kropp)
+    return _dokument(
+        tittel=article.title,
+        beskrivelse=article.lead,
+        kropp=kropp,
+        graf=bool(article.charts()),
+    )
 
 
 def render_index(articles: list[Article], *, tittel: str = "Statman") -> str:

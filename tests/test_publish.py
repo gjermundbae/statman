@@ -7,6 +7,7 @@ være kontrollert, og kan resultatet endre seg uten at inndataene gjorde det.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -15,9 +16,14 @@ from statman import io
 from statman.publish import html, markdown, site
 from statman.publish.article import (
     Article,
+    Axis,
+    Chart,
     Figure,
     Findings,
+    Guide,
+    Mark,
     Prose,
+    Readout,
     Section,
     Stat,
     Stats,
@@ -44,6 +50,35 @@ def katalog(project: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(KATALOG, encoding="utf-8")
     return path
+
+
+def lag_graf(**endringer) -> Chart:
+    grunn = dict(
+        kind="scatter",
+        marks=(
+            Mark(
+                label="Oslo",
+                group="Oslo",
+                x=1.0,
+                y=2.0,
+                size=1.0,
+                tone="vekst",
+                values=(Readout("Vekst", "+21,6 %", "vekst"),),
+                pin=True,
+            ),
+            Mark(label="Røst", group="Nordland", x=-1.0, y=-2.0, size=0.1, tone="fall"),
+        ),
+        fallback="graf.png",
+        alt="Et punktdiagram",
+        x=Axis("Fødsler", -3.0, 3.0, (-3.0, 0.0, 3.0), ("−3", "0", "3")),
+        y=Axis("Flytting", -3.0, 3.0, (-3.0, 0.0, 3.0), ("−3", "0", "3")),
+        legend=(("vekst", "Vokste"), ("fall", "Falt")),
+        guides=(Guide("diagonal", 0.0, ("nullvekst",)),),
+        caption="Bildetekst",
+        source="Kilde: X",
+    )
+    grunn.update(endringer)
+    return Chart(**grunn)  # type: ignore[arg-type]
 
 
 def lag_artikkel(**endringer) -> Article:
@@ -182,6 +217,120 @@ def test_html_gir_tabellen_justering_og_sortering(katalog: Path) -> None:
 
     assert "data-sorterbar" in markup
     assert '<td class="right">+21,6 %</td>' in markup
+
+
+# --------------------------------------------------------------------------
+# Figurer som tegnes i sida
+# --------------------------------------------------------------------------
+def test_graf_overlever_json(project: Path) -> None:
+    """Figuren er nøstet dypere enn de andre blokkene. Da må rundturen sjekkes."""
+    art = lag_artikkel(sections=(Section("Funn", (lag_graf(),)),))
+    pakke = io.output_dir() / "testsak"
+    pakke.mkdir(parents=True)
+    art.write(pakke)
+
+    assert Article.read(pakke) == art
+
+
+def test_grafen_krever_sin_png(katalog: Path, tmp_path: Path) -> None:
+    """Fallbacken er ikke pynt — den er figuren for en leser uten skript."""
+    tom = tmp_path / "tom"
+    tom.mkdir()
+    art = lag_artikkel(sections=(Section("Funn", (lag_graf(),)),))
+
+    assert "graf.png" in art.assets()
+    with pytest.raises(ValueError, match="graf.png"):
+        art.validate(tom)
+
+
+def test_ukjent_fargerolle_stopper(katalog: Path) -> None:
+    """Fargeroller er et lukket vokabular; en ukjent blir usynlig i sida."""
+    skjev = lag_graf(marks=(Mark(label="Oslo", tone="knallrosa"),))
+    with pytest.raises(ValueError, match="knallrosa"):
+        lag_artikkel(sections=(Section("Funn", (skjev,)),)).validate()
+
+
+def test_akse_med_feil_antall_merketekster_stopper(katalog: Path) -> None:
+    skjev = lag_graf(x=Axis("Fødsler", -3.0, 3.0, (-3.0, 0.0, 3.0), ("−3", "0")))
+    with pytest.raises(ValueError, match="merketekster"):
+        lag_artikkel(sections=(Section("Funn", (skjev,)),)).validate()
+
+
+def test_punktdiagram_uten_akser_stopper(katalog: Path) -> None:
+    with pytest.raises(ValueError, match="trenger begge akser"):
+        lag_artikkel(sections=(Section("Funn", (lag_graf(y=None),)),)).validate()
+
+
+def test_soyler_uten_segmenter_stopper(katalog: Path) -> None:
+    skjev = lag_graf(kind="bars", marks=(Mark(label="Oslo", tone="kat1"),))
+    with pytest.raises(ValueError, match="uten segmenter"):
+        lag_artikkel(sections=(Section("Funn", (skjev,)),)).validate()
+
+
+def test_markeringsgruppe_uten_velger_stopper(katalog: Path) -> None:
+    """To koblede figurer, ingen som eier nedtrekket: ingenting kan velges."""
+    a = lag_graf(link="kommune")
+    b = lag_graf(link="kommune")
+    with pytest.raises(ValueError, match="nøyaktig én"):
+        lag_artikkel(sections=(Section("Funn", (a, b)),)).validate()
+
+
+def test_to_velgere_i_samme_gruppe_stopper(katalog: Path) -> None:
+    a = lag_graf(link="kommune", picker="Velg")
+    b = lag_graf(link="kommune", picker="Velg")
+    with pytest.raises(ValueError, match="nøyaktig én"):
+        lag_artikkel(sections=(Section("Funn", (a, b)),)).validate()
+
+
+def test_notatet_viser_grafen_som_png(katalog: Path) -> None:
+    """Notatet er arbeidsformen og leses i en editor. Der er PNG-en figuren."""
+    tekst = markdown.render(lag_artikkel(sections=(Section("Funn", (lag_graf(),)),)))
+
+    assert "![Et punktdiagram](graf.png)" in tekst
+
+
+def test_grafen_laster_ingenting_over_nettet(katalog: Path) -> None:
+    art = lag_artikkel(sections=(Section("Funn", (lag_graf(),)),))
+    assert html.external_assets(html.render(art)) == []
+
+
+def test_grafen_tar_med_figurlaget_bare_når_det_trengs(katalog: Path) -> None:
+    """En sak uten figurer skal ikke bære med seg figurmotoren."""
+    uten = html.render(lag_artikkel())
+    med = html.render(lag_artikkel(sections=(Section("Funn", (lag_graf(),)),)))
+
+    assert "graf-spek" not in uten
+    assert "graf-boble" not in uten
+    assert "graf-spek" in med
+    assert "graf-boble" in med
+
+
+def test_grafen_har_png_bare_i_noscript(katalog: Path) -> None:
+    """Uten skript er PNG-en figuren. Med skript skal den aldri lastes ned."""
+    markup = html.render(lag_artikkel(sections=(Section("Funn", (lag_graf(),)),)))
+
+    assert '<noscript><img src="graf.png"' in markup
+    assert markup.count('<img src="graf.png"') == 1
+    # Skriptet trenger å vite hva det skal falle tilbake på hvis det ryker.
+    assert 'data-fallback="graf.png"' in markup
+
+
+def test_grafspesifikasjonen_kan_ikke_lukke_script_elementet(katalog: Path) -> None:
+    """Et merkenavn er data. Kommer det fra en kilde, kan det inneholde hva som helst.
+
+    Spesifikasjonen ligger i et rått script-element, som slutter på det første
+    ``</``. Klarer et kommunenavn å skrive det, eier det resten av sida.
+    """
+    stygg = lag_graf(
+        marks=(Mark(label='</script><script>alert(1)</script>', tone="vekst"),),
+    )
+    markup = html.render(lag_artikkel(sections=(Section("Funn", (stygg,)),)))
+
+    assert "</script><script>alert(1)" not in markup
+    assert "\\u003c/script" in markup
+    # …og det skal fortsatt være gyldig JSON som gir navnet tilbake uendret.
+    spek = markup.split('class="graf-spek">')[1].split("</script>")[0]
+    assert json.loads(spek)["marks"][0]["label"] == '</script><script>alert(1)</script>'
 
 
 # --------------------------------------------------------------------------

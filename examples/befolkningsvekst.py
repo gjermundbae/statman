@@ -20,6 +20,7 @@ Kjør:  uv run statman example befolkning
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Final
 
@@ -37,6 +38,13 @@ from statman.sources import ssb  # noqa: E402
 
 TABELL: Final[str] = "06913"
 SLUG: Final[str] = "befolkningsvekst_kommune"
+
+# Publiseringsdatoen er en redaksjonell opplysning, ikke et tidsstempel. Den
+# ble satt da saken først ble publisert, og skal ikke flytte seg fordi
+# modellene bygges på nytt: da ville en ren figurendring sendt saken til
+# toppen av arkivet som om tallene var nye. Når tallene *er* nye, settes den
+# for hånd — det er nettopp da noen bør ta stilling til det.
+PUBLISERT: Final[str] = "2026-08-02"
 MODEL_VEKST: Final[str] = "mart.befolkningsvekst"
 MODEL_AAR: Final[str] = "mart.befolkning_kommune_aar"
 MODEL_FYLKE: Final[str] = "mart.befolkning_fylke_aar"
@@ -68,7 +76,10 @@ N_EKSTREM: Final[int] = 5
 Y_MIN: Final[float] = -0.05
 Y_MAKS: Final[float] = 0.08
 
-FARGE_VEKST: Final[str] = "#1f6f4a"
+# Fargene i PNG-ene skal være de samme som i figurene sida tegner, ellers
+# ser leseren to versjoner av samme graf. Verdiene speiler fargerollene i
+# statman/publish/assets/graf.css, der begrunnelsen og målingene står.
+FARGE_VEKST: Final[str] = "#2a9d5c"
 FARGE_FALL: Final[str] = "#a33b32"
 FARGE_FLYTTING: Final[str] = "#2b6ca3"
 FARGE_FODSEL: Final[str] = "#c07a2b"
@@ -612,6 +623,250 @@ def _plot_fylke(fylke: pl.DataFrame, path: Path, periode: str, aar_start: int) -
 
 
 # --------------------------------------------------------------------------
+# Figurer som tegnes i sida
+# --------------------------------------------------------------------------
+# PNG-ene over er fortsatt fasit: de står i notatet, og de står i sida for en
+# leser uten JavaScript. Det som følger er de samme tallene satt opp slik at
+# sida kan tegne dem selv — og dermed la leseren finne sin egen kommune.
+#
+# Merk hva som *ikke* sendes: ingen farger og ingen piksler. Analysen sier at
+# et merke er «vekst», publiseringslaget bestemmer hvilken grønn det blir.
+LENKE: Final[str] = "kommune"
+
+
+def _akse(lav: float, hoy: float, steg: float, etikett: str, tekst) -> publish.Axis:
+    """Et utsnitt med luft, og aksemerker på runde tall inni det.
+
+    Utsnittet er et valg — hvor mye av halen som får være med — og tas her.
+    Rendereren skalerer bare verdi til piksel innenfor det den får oppgitt.
+    """
+    pute = (hoy - lav) * 0.05
+    lo, hi = lav - pute, hoy + pute
+    merker: list[float] = []
+    v = math.ceil(lo / steg) * steg
+    while v <= hi + 1e-9:
+        merker.append(round(v, 6))
+        v += steg
+    return publish.Axis(
+        label=etikett,
+        lo=lo,
+        hi=hi,
+        ticks=tuple(merker),
+        tick_labels=tuple(tekst(m) for m in merker),
+    )
+
+
+def _tone(vekst: float) -> str:
+    """Fortegnet avgjøres på den fulle verdien, aldri på den avrundede.
+
+    Masfjorden vokste med nøyaktig 0 personer, og to kommuner ligger på
+    ±0,04 prosent. Spør man «er prosenten større enn null» etter avrunding,
+    havner alle tre på feil side.
+    """
+    if vekst > 0:
+        return "vekst"
+    if vekst < 0:
+        return "fall"
+    return "noytral"
+
+
+def _avlesning(rad: dict) -> tuple[publish.Readout, ...]:
+    """Det boblen viser. Ferdig formatert her, aldri i nettleseren."""
+    return (
+        publish.Readout("Vekst", _pst(rad["vekst_pst"]), _tone(rad["vekst"])),
+        publish.Readout("Nettoinnflytting", _fortegn(rad["nettoinnflytting_sum"]), "kat1"),
+        publish.Readout("Fødselsoverskudd", _fortegn(rad["fodselsoverskudd_sum"]), "kat2"),
+        publish.Readout("Folketall", _antall(rad["folkemengde_slutt"])),
+    )
+
+
+def _graf_komponenter(sml: pl.DataFrame, kilde: str) -> publish.Chart:
+    """Punktskyen, tegnet i sida. Samme tall som ``komponenter.png``."""
+    df = sml.with_columns(
+        (pl.col("fodselsoverskudd_sum") / pl.col("folkemengde_start") * 1000).alias("fodsel"),
+        (pl.col("nettoinnflytting_sum") / pl.col("folkemengde_start") * 1000).alias("flytting"),
+    )
+    x_lav, x_hoy = float(df["fodsel"].min()), float(df["fodsel"].max())
+    y_lav, y_hoy = float(df["flytting"].min()), float(df["flytting"].max())
+    storst = float(df["folkemengde_slutt"].max())
+
+    # De samme navnene som PNG-en setter, så de to figurene peker på det samme.
+    navngitt = {
+        rad["kommune"] for rad in _merkekandidater(df, x_hoy - x_lav, y_hoy - y_lav)
+    }
+
+    merker = tuple(
+        publish.Mark(
+            label=kort_navn(rad["kommune"]),
+            group=kort_navn(rad["fylke"]),
+            x=round(rad["fodsel"], 1),
+            y=round(rad["flytting"], 1),
+            # Flaten følger folketallet, så radien følger kvadratrota. Tallet
+            # er relativt (0–1); hvor mange piksler det blir er sidas sak.
+            size=round(math.sqrt(rad["folkemengde_slutt"] / storst), 3),
+            tone=_tone(rad["vekst"]),
+            values=_avlesning(rad),
+            note=_pst(rad["vekst_pst"]),
+            pin=rad["kommune"] in navngitt,
+        )
+        for rad in df.iter_rows(named=True)
+    )
+
+    return publish.Chart(
+        kind="scatter",
+        marks=merker,
+        fallback="komponenter.png",
+        alt="Punktdiagram: fødselsoverskudd langs x-aksen, nettoinnflytting "
+        "langs y-aksen, én prikk per kommune.",
+        x=_akse(x_lav, x_hoy, 50, "Fødselsoverskudd per 1 000 innbyggere →", _antall),
+        y=_akse(y_lav, y_hoy, 100, "← Nettoinnflytting per 1 000 innbyggere", _antall),
+        legend=(("vekst", "Kommunen vokste"), ("fall", "Kommunen falt")),
+        guides=(publish.Guide("diagonal", 0.0, ("nullvekst",)),),
+        link=LENKE,
+        picker="Framhev kommune",
+        group_label="Avgrens til fylke",
+        caption="Flaten følger folketallet. Den stiplede diagonalen er nullvekst. "
+        "At skyen ligger langt mer spredt loddrett enn vannrett, er det samme "
+        "funnet som i punktet over — sett fra siden. Pekeren treffer nærmeste "
+        "kommune; du trenger ikke treffe prikken.",
+        source=kilde,
+    )
+
+
+def _graf_rangstripe(sml: pl.DataFrame, kilde: str) -> publish.Chart:
+    """Alle kommunene på én linje, rangert. Svarer på «hvor står min?».
+
+    Den bærer ``vekst_topp_bunn.png`` som fallback og erstatter den: figuren
+    viser den samme rangeringen, bare hele veien ned i stedet for tjue i hver
+    ende. Uten skript er det topp- og bunnlista leseren får, som før.
+    """
+    df = sml.sort("vekst_pst", descending=True)
+    antall = df.height
+    vokste = df.filter(pl.col("vekst") > 0).height
+    falt = df.filter(pl.col("vekst") < 0).height
+
+    # Vokste + falt er ikke nødvendigvis lik antallet: en kommune kan ende på
+    # nøyaktig samme folketall. Det er ett tall å forklare, ikke et avvik å
+    # skjule — så vi finner det og skriver det i bildeteksten.
+    flate = df.filter(pl.col("vekst") == 0)
+    forklaring = ""
+    if flate.height == 1:
+        forklaring = (
+            f" De to tallene over summerer seg til {vokste + falt} og ikke {antall}: "
+            f"{kort_navn(flate.row(0, named=True)['kommune'])} endte på nøyaktig samme "
+            "folketall som den startet på, og hører ikke hjemme i noen av gruppene."
+        )
+    elif flate.height > 1:
+        forklaring = (
+            f" De to tallene over summerer seg til {vokste + falt} og ikke {antall}: "
+            f"{flate.height} kommuner endte på nøyaktig samme folketall som de "
+            "startet på."
+        )
+
+    merker = tuple(
+        publish.Mark(
+            label=kort_navn(rad["kommune"]),
+            group=kort_navn(rad["fylke"]),
+            tone=_tone(rad["vekst"]),
+            values=(
+                publish.Readout("Vekst", _pst(rad["vekst_pst"]), _tone(rad["vekst"])),
+                publish.Readout("Folketall", _antall(rad["folkemengde_slutt"])),
+            ),
+            note=f"nr. {i + 1} av {antall}",
+        )
+        for i, rad in enumerate(df.iter_rows(named=True))
+    )
+
+    topp = df.row(0, named=True)
+    bunn = df.row(-1, named=True)
+    return publish.Chart(
+        kind="strip",
+        marks=merker,
+        fallback="vekst_topp_bunn.png",
+        alt=f"To liggende søylediagram: de {N_TOPP} kommunene med størst vekst "
+        f"og de {N_TOPP} med størst nedgang, i prosent.",
+        # Aksen er rangeringen selv: merkene står i hver ende av lista, og
+        # merketeksten er kommunen som ligger der.
+        x=publish.Axis(
+            lo=0,
+            hi=antall - 1,
+            ticks=(0, antall - 1),
+            tick_labels=(
+                f"{kort_navn(topp['kommune'])} {_pst(topp['vekst_pst'])}",
+                f"{kort_navn(bunn['kommune'])} {_pst(bunn['vekst_pst'])}",
+            ),
+        ),
+        guides=(
+            publish.Guide("x", vokste - 0.5, (f"{vokste} vokste", f"{falt} falt")),
+        ),
+        link=LENKE,
+        caption=f"Alle {antall} sammenlignbare kommunene på én linje, rangert — "
+        "prosentvekst setter små kommuner både til topps og til bunns. Den valgte "
+        "kommunen får en nål her også, så du ser med én gang om den er et ytterpunkt "
+        "eller midt i flokken." + forklaring,
+        source=kilde,
+    )
+
+
+def _graf_fylke(fylke: pl.DataFrame, aar_start: int) -> publish.Chart:
+    """Fylkessøylene. Tallene kommer fra fylkesserien, ikke fra kommunesummen.
+
+    Se :func:`_fylkesperiode` for hvorfor det er den eneste riktige kilden —
+    en summering over kommunene mangler dem som ble delt i 2020.
+    """
+    df = fylke.sort("vekst_pst", descending=True)
+    rader = list(df.iter_rows(named=True))
+
+    def pst(rad: dict, kolonne: str) -> float:
+        return rad[kolonne] / rad["folkemengde_start"] * 100
+
+    # Utsnittet må romme både den negative og den positive enden av stabelen.
+    lav = min(0.0, min(min(pst(r, "fodselsoverskudd_sum"), 0.0) for r in rader))
+    hoy = max(
+        max(pst(r, "nettoinnflytting_sum"), 0.0)
+        + max(pst(r, "fodselsoverskudd_sum"), 0.0)
+        for r in rader
+    )
+
+    merker = tuple(
+        publish.Mark(
+            label=kort_navn(rad["fylke"]),
+            segments=(
+                ("kat1", round(pst(rad, "nettoinnflytting_sum"), 2)),
+                ("kat2", round(pst(rad, "fodselsoverskudd_sum"), 2)),
+            ),
+            note=_pst(rad["vekst_pst"]),
+            values=(
+                publish.Readout("Samlet vekst", _pst(rad["vekst_pst"]), _tone(rad["vekst"])),
+                publish.Readout(
+                    "Nettoinnflytting", _antall(rad["nettoinnflytting_sum"]), "kat1"
+                ),
+                publish.Readout(
+                    "Fødselsoverskudd", _antall(rad["fodselsoverskudd_sum"]), "kat2"
+                ),
+                publish.Readout("Kommuner", str(rad["kommuner"])),
+            ),
+        )
+        for rad in rader
+    )
+
+    return publish.Chart(
+        kind="bars",
+        marks=merker,
+        fallback="fylke.png",
+        alt="Liggende søyler per fylke, delt i nettoinnflytting og fødselsoverskudd.",
+        x=_akse(lav, hoy, 4, "", lambda v: _akse_pst(v / 100)),
+        legend=(("kat1", "Nettoinnflytting"), ("kat2", "Fødselsoverskudd")),
+        link=LENKE,
+        caption=f"Bidrag til befolkningsvekst, i prosent av folketallet 1.1.{aar_start}. "
+        "Der fødselsoverskuddet er negativt går søylen motsatt vei, fordi bidraget "
+        "trekker veksten ned. Klikk på et fylke for å avgrense figurene over til det.",
+        source="Kilde: SSB tabell 06913, fylkesserien. Summen av de to søylene er "
+        "ikke helt lik totalen til høyre; differansen er restleddet SSB ikke fordeler.",
+    )
+
+
+# --------------------------------------------------------------------------
 # Artikkel — notatet og den publiserte sida rendres begge herfra
 # --------------------------------------------------------------------------
 def _fylkesperiode(
@@ -742,25 +997,12 @@ def artikkel(
                     f"{kort_navn(fylke.row(-1, named=True)['fylke'])}.",
                 )
             ),
-            publish.Figure(
-                "vekst_topp_bunn.png",
-                alt=f"To liggende søylediagram: de {N_TOPP} kommunene med størst vekst "
-                f"og de {N_TOPP} med størst nedgang, i prosent.",
-                caption="Prosentvekst rangerer små kommuner til topps og til bunns. "
-                "Folketallet står ved siden av hver søyle, fordi 27 prosent i en "
-                "kommune med 1 257 innbyggere er noe annet enn 27 prosent i Oslo.",
-                source=utenfor_kilde,
-                width="full",
-            ),
-            publish.Figure(
-                "komponenter.png",
-                alt="Punktdiagram: fødselsoverskudd langs x-aksen, nettoinnflytting "
-                "langs y-aksen, én prikk per kommune.",
-                caption="Den stiplede diagonalen er nullvekst. At skyen ligger langt "
-                "mer spredt loddrett enn vannrett, er det samme funnet som i punktet "
-                "over — sett fra siden.",
-                source=utenfor_kilde,
-            ),
+            _graf_komponenter(sml, utenfor_kilde),
+            # Rangeringen bærer vekst_topp_bunn.png som fallback, og erstatter
+            # den dermed framfor å komme i tillegg til den. En leser uten
+            # skript ser nøyaktig den figuren hen så før; en leser med skript
+            # får hele rangeringen i stedet for de tjue i hver ende.
+            _graf_rangstripe(sml, utenfor_kilde),
         ),
     )
 
@@ -790,14 +1032,7 @@ def artikkel(
                 ),
                 caption="Klikk på en kolonneoverskrift for å sortere.",
             ),
-            publish.Figure(
-                "fylke.png",
-                alt="Liggende søyler per fylke, delt i nettoinnflytting og "
-                "fødselsoverskudd.",
-                caption="Samme tabell som graf, med veksten delt i de to komponentene.",
-                source="Kilde: SSB tabell 06913, fylkesserien. Sorte punkter er samlet "
-                "vekst; avviket fra søylene er restleddet SSB ikke fordeler.",
-            ),
+            _graf_fylke(fylke, aar_start),
         ),
     )
 
@@ -926,7 +1161,7 @@ def artikkel(
             "saken er ikke å regne ut prosentvekst, men å vite hvilke kommuner man "
             "*ikke* kan regne prosentvekst for."
         ),
-        published=proveniens["bygget"][:10],
+        published=PUBLISERT,
         sections=(funn, fylker, aar_for_aar, metode),
         caveats=METRICS,
         provenance={
@@ -999,7 +1234,13 @@ def main() -> list[Path]:
     target.mkdir(parents=True, exist_ok=True)
 
     csv_path = target / f"{SLUG}.csv"
-    vekst.sort("vekst_pst", descending=True, nulls_last=True).write_csv(csv_path)
+    # Kommunenummeret som sekundærnøkkel: de 34 kommunene uten rangering har
+    # alle vekst_pst = null, og uten et tiebreak kommer de i vilkårlig
+    # rekkefølge. Da endrer den publiserte CSV-en seg for hvert bygg uten at
+    # ett eneste tall er annerledes.
+    vekst.sort(
+        ["vekst_pst", "kommunenummer"], descending=[True, False], nulls_last=True
+    ).write_csv(csv_path)
 
     figurer = [
         _plot_topp_bunn(sml, target / "vekst_topp_bunn.png", periode, aar_slutt),

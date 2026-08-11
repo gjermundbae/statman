@@ -12,6 +12,7 @@ from pathlib import Path
 from statman import catalog as catalog_mod
 from statman.publish.article import (
     Article,
+    Chart,
     Figure,
     Findings,
     Prose,
@@ -77,9 +78,13 @@ def _block(block: object) -> list[str]:
             "",
         ]
 
-    if isinstance(block, Figure):
+    # En tegnet figur er en PNG i notatet. Notatet er arbeidsformen — det leses
+    # i en editor, ikke i en nettleser — så det er fallbacken som hører hjemme
+    # her. Det er samme figur, og det er derfor blokka må ha en.
+    if isinstance(block, (Figure, Chart)):
+        fil = block.file if isinstance(block, Figure) else block.fallback
         tekst = block.caption or block.alt
-        lines = [f"![{block.alt}]({block.file})", ""]
+        lines = [f"![{block.alt}]({fil})", ""]
         if tekst:
             kilde = f" {block.source}" if block.source else ""
             lines += [f"*{tekst}*{kilde}", ""]

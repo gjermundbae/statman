@@ -51,6 +51,7 @@ statman/
   sources/               én modul per kilde: hent, skriv ned uendret
   models/                transformasjonene
   publish/               sakspakke -> artikkel: Article, markdown, html, site
+  publish/assets/        statman.css/js (sida), graf.css/js (figurene)
 catalog/metrics.yml      definisjoner, enheter, forbehold
 examples/                ende-til-ende-eksempler
 tests/
@@ -151,6 +152,43 @@ art.write(pakke)
 Forbehold oppgis som *nøkler*, aldri som tekst. Skriver du dem av for hånd, har
 du laget en kopi som forvitrer — og `validate()` sier fra hvis nøkkelen ikke
 finnes.
+
+### Figurer sida tegner selv
+
+`publish.Figure` er en PNG. `publish.Chart` er en figur sida tegner som SVG, med
+en PNG under seg for den som ikke har JavaScript:
+
+```python
+publish.Chart(
+    kind="scatter",                     # scatter · strip · bars
+    marks=(
+        publish.Mark(
+            label="Ibestad", group="Troms",
+            x=-161.9, y=69.2, size=0.05, tone="fall",
+            values=(publish.Readout("Vekst", "-9,3 %", "fall"),),
+        ),
+    ),
+    fallback="komponenter.png",         # står i notatet, og i sida uten skript
+    alt="…",
+    x=publish.Axis("Fødselsoverskudd →", lo=-177, hi=152,
+                   ticks=(-150, 0, 150), tick_labels=("-150", "0", "150")),
+    y=publish.Axis("← Nettoinnflytting", lo=-160, hi=485),
+    legend=(("vekst", "Kommunen vokste"), ("fall", "Kommunen falt")),
+    link="kommune", picker="Framhev kommune", group_label="Avgrens til fylke",
+)
+```
+
+Figurer med samme `link` deler markering: velger leseren en kommune, lyser den
+opp i alle sammen. Nøyaktig én av dem setter `picker`.
+
+`tone` er en *fargerolle* — `vekst`, `fall`, `kat1`…`kat4`, `noytral` — ikke en
+farge. Hvilken grønn «vekst» blir står i `publish/assets/graf.css`, sammen med
+målingene som viser at den kan skilles fra `fall` av en leser som ikke ser rødt.
+En ukjent rolle stopper publiseringen.
+
+Alt annet gjelder som før: tallene kommer ferdig formatert, og sida verken
+teller, summerer eller velger utvalg. Den regner bare ut hvor på skjermen et
+merke skal stå.
 
 ## Å legge til en kilde
 

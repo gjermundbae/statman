@@ -97,10 +97,28 @@ forvitrer i katalogen.
 
 ## Publisering
 
-Publiseringslaget har én regel, og den er streng: **det regner ingenting ut.**
-Alle tall kommer inn ferdig formatert, alle forbehold kommer fra katalogen. En
-renderer som ikke kan regne, kan heller ikke regne feil — og da er det trygt å
-la den være leken.
+Publiseringslaget har én regel, og den er streng: **det teller ikke, summerer
+ikke, og velger ikke utvalg.** Alle tall kommer inn ferdig formatert, alle
+forbehold kommer fra katalogen. En renderer som ikke kan regne, kan heller ikke
+regne feil — og da er det trygt å la den være leken.
+
+Regelen sto opprinnelig som «det regner ingenting ut», og ble skjerpet til det
+den egentlig betyr da figurene begynte å tegnes i sida. En figur må mappe verdi
+til piksel et sted, og den skaleringen er ombrekking — samme slag som at
+rendereren allerede bestemmer kolonnebredder. Den sier ingenting om verden.
+
+Grensa er verdt å tegne skarpt, for begge sidene av den er lette å bomme på. Da
+figurlaget ble prototypet, lot vi sida gjøre to ting den ikke skulle:
+
+- **Aggregere.** Fylkestall summert opp fra kommune-CSV-en ga Vestfold +8,5 %
+  der artikkelen sa +14,1 %, fordi tre kommuner er holdt utenfor som ikke
+  sammenlignbare. Utvalget er et valg, og valg hører i analysen.
+- **Telle.** «Hvor mange kommuner vokste» talt i nettleseren ga 205 av 323. Det
+  riktige er 203, pluss én som endte på nøyaktig null. Sida talte på de
+  *avrundede* prosentene, og to kommuner på ±0,04 % havnet på feil side.
+
+Begge tallene så helt rimelige ut. Det er hele poenget: en renderer som regner
+gir ikke feilmelding, den gir et annet tall.
 
 Seamen er en fil. Når en analyse er ferdig, skriver den en `Article` — tittel,
 ingress, seksjoner, figurer, tabeller med ferdige celler, metrikknøklene
@@ -121,6 +139,30 @@ Sida er ett dokument. CSS og JS ligger inne i fila, det finnes ingen fonter,
 biblioteker eller sporing utenfra, og en sjekk stopper publiseringen om noe
 skulle bli hentet over nettet likevel. Det gjør at sida virker fra disk, at den
 kan arkiveres som én fil, og at den ikke råtner når et CDN legges ned.
+
+## Figurene
+
+En `Chart` er en figur sida tegner selv, som SVG. Den bærer merkene med de
+tallene analysen valgte, ferdig formatert, og **ingen farger** — analysen sier
+at et merke er «vekst», publiseringslaget bestemmer hvilken grønn det blir.
+Paletten kan dermed byttes ett sted når den ikke består fargeblindhetssjekken,
+uten å røre en eneste analyse.
+
+Hver figur har en PNG under seg. Den står i notatet, den står i sida for en
+leser uten JavaScript, og den settes inn igjen om tegningen skulle ryke. En
+figur er altså aldri *avhengig* av å være interaktiv; interaktiviteten er noe
+som kommer i tillegg. PNG-en ligger i `<noscript>`, så den som får SVG-en aldri
+laster den ned.
+
+Egen SVG framfor et diagrambibliotek er den samme avveiningen som at
+byggegrafen er egen kode: Plotly er 3,5 megabyte og forutsetter et CDN, og
+begge deler bryter regelen om én selvstendig fil. Figurene arver sidas
+CSS-variabler, så mørk modus og typografi bare virker.
+
+Interaktivitet legges til der leseren er en av radene. Kommunesaken har 323
+kommuner med hvert sitt navn; en leser fra Ibestad skal kunne finne Ibestad.
+En figur som viser en *fordeling* og ikke identiteter — spaghettiplottene —
+har lite å hente på å bli klikkbar, og blir stående som PNG.
 
 Arkivet bygges av det som ligger i `docs/`, ikke av det som ligger i `output/`.
 `output/` er gitignorert og tomt i en fersk klone; `docs/` er det som faktisk er
@@ -150,8 +192,20 @@ Reservert, ikke glemt. Hver av dem bygges når en konkret analyse krever det:
   finnes **før** sakspakke nummer tre, ikke etter. Arkivet er en liste. Blir
   det mange nok saker til at en liste ikke holder, er søk og emneknagger neste.
 - **Nyhetsbrev.** Fortsatt utsatt. Krever at noen abonnerer.
-- **Figurer som SVG.** matplotlib kan skrive begge deler. Gjøres når en figur
-  faktisk ser dårlig ut på en skjerm den ble publisert til, ikke før.
+- ~~**Figurer som SVG.**~~ *Gjort, men ikke slik det sto her.* Terskelen var at
+  en figur skulle se dårlig ut på skjerm. Det som faktisk utløste det var noe
+  annet: en leser kunne ikke finne sin egen kommune blant 323 prikker. SVG ble
+  midlet, ikke målet — se «Figurene» over.
+- **Linjediagram i `Chart`.** Punkt, stripe og søyle finnes. Linja låser opp
+  rente_bolig og begge preben-sakene på én gang, og bygges når den første av
+  dem skal røres.
+- **Figurtypografi på små skjermer.** En fast `viewBox` skalerer teksten ned
+  med bredden, så aksemerkene blir små under ~500 piksler. Løsningen er kjent —
+  eget utsnitt og færre merker under et brytepunkt — og gjøres når noen leser
+  en av sakene på telefon og blir irritert.
+- **Tastaturnavigasjon i punktskyer.** Søylene kan fokuseres, nedtrekket virker,
+  og tabellen har tallene. Å tabbe mellom 323 prikker er derimot ikke løst, og
+  krever noe smartere enn `tabindex` på hver av dem.
 - **Objektlagring og backup for rådata.** `data/` er gitignorert, så rådata,
   byggelogger og sakspakker finnes i dag bare på maskinen de ble laget på.
   Rådata er reproduserbart via konnektorene, men ikke bit for bit hvis kilden
@@ -160,4 +214,4 @@ Reservert, ikke glemt. Hver av dem bygges når en konkret analyse krever det:
 ## Stack
 
 Python 3.12 · DuckDB · Polars · httpx · Typer · PyYAML · uv
-Grafer: matplotlib for arbeid, Datawrapper for publisering.
+Grafer: matplotlib for arbeid og for fallback, egen SVG for publisering.

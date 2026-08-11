@@ -16,9 +16,14 @@ Deretter, når du er fornøyd:  ``statman publish min-sak``
 
 from statman.publish.article import (
     Article,
+    Axis,
+    Chart,
     Figure,
     Findings,
+    Guide,
+    Mark,
     Prose,
+    Readout,
     Section,
     Stat,
     Stats,
@@ -28,9 +33,14 @@ from statman.publish import html, markdown, site
 
 __all__ = [
     "Article",
+    "Axis",
+    "Chart",
     "Figure",
     "Findings",
+    "Guide",
+    "Mark",
     "Prose",
+    "Readout",
     "Section",
     "Stat",
     "Stats",
