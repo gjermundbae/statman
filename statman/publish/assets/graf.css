@@ -37,12 +37,80 @@
   }
 }
 
+/* De ordnede skalaene.
+
+   Forskjellen fra rollene over er ikke at de er flere, men at rekkefølgen
+   bærer mening. Da holder det ikke at nabotrinnene *kan* skilles — de må
+   kunne skilles i riktig rekkefølge. Derfor er --skala monoton i lyshet:
+   en skala som stiger i lyshet stiger også i lyshet for enhver som ser
+   farger annerledes, uansett hva som skjer med fargetonen.
+
+   --avvik divergerer, og kan ikke være monoton — den har en midte. Den er
+   derfor forankret i blått og oransje og ikke i grønt og rødt. Det var et
+   målt valg: en rød/grønn divergerende skala med samme lyshetsprofil endte
+   på ΔE 3,6 mellom ytterpunktene for deuteranopi, altså praktisk talt
+   usynlig forskjell mellom «falt mest» og «vokste mest». Blå/oransje gir
+   20,5 i det samme oppsettet.
+
+     skala  lys   nabotrinn ΔE ≥ 8,3    ender 40,6    monoton lyshet
+     skala  mørk  nabotrinn ΔE ≥ 10,2   ender 43,2    monoton lyshet
+     avvik  lys   trinn 2 mot 4 ΔE 12,4  ender 20,5
+     avvik  mørk  trinn 2 mot 4 ΔE 14,2  ender 23,2
+
+   Alle tall er verste utfall over deutan, protan og tritan, i OKLab×100
+   etter Machado-Oliveira-Fernandes, som resten av fila. Bytter du en av
+   dem, kjør sjekken på nytt. Ikke se på dem. */
+:root {
+  --skala1: #e4d8aa;
+  --skala2: #deb77a;
+  --skala3: #52aed0;
+  --skala4: #4286c2;
+  --skala5: #2e5ea5;
+
+  --avvik1: #b06f2d;
+  --avvik2: #d8ae89;
+  --avvik3: #e2ded7;
+  --avvik4: #8bb6df;
+  --avvik5: #3a77b8;
+
+  /* Ikke en verdi, men fraværet av en.
+
+     Denne kan ikke løses med farge. En nøytral grå som ikke selv ser ut som
+     et datapunkt havner uunngåelig nær midten av en divergerende skala —
+     målt ΔE 1,9 mot --avvik3 i første forsøk, altså samme farge. Derfor
+     bærer skravuren skillet: --mangler-strek ligger 24,7 fra flaten sin, og
+     et mønster er noe annet enn en farge også for den som ser figuren i
+     gråtoner. */
+  --mangler: #c8c2b5;
+  --mangler-strek: #7d766a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --skala1: #274168;
+    --skala2: #226094;
+    --skala3: #0086af;
+    --skala4: #b69842;
+    --skala5: #d0be79;
+
+    --avvik1: #a56217;
+    --avvik2: #b98f67;
+    --avvik3: #bebab2;
+    --avvik4: #73a0cb;
+    --avvik5: #3c7dc2;
+
+    --mangler: #3a352d;
+    --mangler-strek: #7a7266;
+  }
+}
+
 /* Panelet og tegnforklaringen settes inn av skriptet, som søsken til figuren.
    Uten dette ville de klemt seg inn i tekstspennet mens figuren står bredt. */
 @supports (grid-template-columns: subgrid) {
   .ark > section > .graf-styring.bred,
+  .ark > section > .graf-lagtekst.bred,
   .ark > section > .graf-tegn.bred { grid-column: wide; }
   .ark > section > .graf-styring.full,
+  .ark > section > .graf-lagtekst.full,
   .ark > section > .graf-tegn.full { grid-column: full; }
 }
 
@@ -125,6 +193,65 @@
 .dempet .merke:not(.valgt):not(.i-gruppe) { opacity: 0.18; }
 .dempet .tikk:not(.valgt):not(.i-gruppe) { opacity: 0.28; }
 .valgt-ring { fill: none; stroke: var(--blekk); stroke-width: 2; }
+
+/* ------------------------------------------------------------ flisediagram */
+/* Flisene er sitt eget lag: de er ikke merker på en akse, de *er* flaten.
+   Kantstreken går i papirfargen og ikke i en strekfarge, så rutenettet
+   mellom flisene leses som mellomrom framfor som enda en datastrek. */
+.flis { stroke: var(--papir); stroke-width: 1; transition: opacity 180ms ease; }
+.flis-flate:hover { cursor: pointer; }
+.dempet .flis:not(.valgt):not(.i-gruppe) { opacity: 0.25; }
+.flis-ramme { fill: none; stroke: var(--strek-mork); stroke-width: 1; }
+.flis-valgt { fill: none; stroke: var(--blekk); stroke-width: 2.5; }
+
+/* Navnet står bare i flisene som har plass til det. Resten har boblen, og
+   den valgte flisa får navnet sitt uansett hvor liten den er. */
+/* Hvit tekst på flisen, med en tynn mørk kontur under. Konturen er der
+   fordi flisene spenner fra nesten hvitt til mørkeblått i samme figur —
+   uten den forsvinner navnet på de lyseste. */
+.flis-navn {
+  font-size: 11px; font-weight: 600; fill: #fff;
+  pointer-events: none;
+  paint-order: stroke; stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: 2px; stroke-linejoin: round;
+}
+.flis-tall {
+  font-size: 9.5px; fill: #fff; fill-opacity: 0.85;
+  pointer-events: none;
+  paint-order: stroke; stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: 2px; stroke-linejoin: round;
+  font-variant-numeric: tabular-nums;
+}
+/* Gruppenavnet ligger over gruppa si, i sidas blekk — det er en overskrift
+   på figuren, ikke en verdi i den. */
+.flis-gruppe {
+  font-size: 11.5px; font-weight: 650; fill: var(--dempet);
+  letter-spacing: 0.02em; pointer-events: none;
+}
+
+/* Lagvelgeren: ett trykk per lag framfor et nedtrekk, fordi lagene er få og
+   poenget er å bla mellom dem og se flaten skifte. */
+.graf-lag { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.graf-lag button {
+  font: inherit; font-size: 0.85rem;
+  padding: 0.42rem 0.8rem;
+  cursor: pointer;
+  color: var(--dempet);
+  background: transparent;
+  border: 1px solid var(--strek-mork);
+  border-radius: 6px;
+}
+.graf-lag button:hover { color: var(--aksent); border-color: var(--aksent); }
+.graf-lag button[aria-pressed="true"] {
+  color: var(--papir); background: var(--blekk); border-color: var(--blekk);
+}
+.graf-lag button:focus-visible { outline: 2px solid var(--aksent); outline-offset: 1px; }
+
+/* Bildeteksten som hører til det valgte laget, ikke til figuren. */
+.graf-lagtekst {
+  margin: 0 0 0.8rem;
+  font-size: 0.85rem; line-height: 1.5; color: var(--dempet);
+}
 
 /* Tegnforklaringen er alltid der når figuren har mer enn én farge.
    Identitet kodes aldri med farge alene. */

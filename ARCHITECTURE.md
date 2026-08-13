@@ -164,6 +164,40 @@ kommuner med hvert sitt navn; en leser fra Ibestad skal kunne finne Ibestad.
 En figur som viser en *fordeling* og ikke identiteter — spaghettiplottene —
 har lite å hente på å bli klikkbar, og blir stående som PNG.
 
+### Fargelag
+
+Et flisediagram har én oppdeling av flaten og mange måter å farge den på.
+Yrkessaken har seks: lønn, endring, kjønn, alder, sykefravær, arbeidstid. Det
+er den samme figuren seks ganger, og å publisere den seks ganger ville vært å
+be leseren sammenligne seks bilder hen ikke kan legge oppå hverandre.
+
+Lagene er derfor en del av figuren, ikke seks figurer. Oppdelingen ligger fast
+når laget byttes — det er hele poenget, for da kan leseren følge én flis
+gjennom alle seks og se yrket sitt skifte betydning. Analysen sender én
+fargerolle per lag per merke, og et merke som mangler en av dem stopper
+publiseringen: det ville blitt usynlig i nøyaktig ett lag, altså den slags feil
+ingen ser før noen trykker på riktig knapp.
+
+Det tvang fram et skille paletten ikke hadde. `vekst` og `kat1` er
+*kategoriske* roller uten rekkefølge. Et lag som viser en mengde trenger noe
+annet: en skala der trinn 3 ligger mellom 2 og 4, og gjør det for alle som ser
+farger. `skala1`…`skala5` er derfor monoton i lyshet, som er den egenskapen som
+overlever enhver fargesynsvariant. `avvik1`…`avvik5` divergerer om en midte og
+kan ikke være monoton — den er forankret i blått og oransje og ikke i grønt og
+rødt, fordi en rød/grønn divergerende skala med den lyshetsprofilen målte
+ΔE 3,6 mellom ytterpunktene for deuteranopi. Altså: «falt mest» og «vokste
+mest» var praktisk talt samme farge. Blå/oransje ga 20,5. Målingene står i
+`graf.css`, ved siden av verdiene.
+
+At oppdelingen regnes ut i nettleseren er innenfor regelen, og det er verdt å
+si hvorfor: en squarified treemap mapper verdi til flate og flate til piksel,
+og det er ombrekking av samme slag som at rendereren bestemmer kolonnebredder.
+Den sier ingenting om verden. Det figuren *påstår* — at flatene til sammen er
+helheten — er derimot en påstand, og den er sjekket i mart-laget: de 407 yrkene
+summerer seg til nøyaktig det SSB publiserer på «Alle yrker», i begge ender av
+perioden. Uten den sjekken ville en flisefigur sett like riktig ut på et
+utvalg som på en helhet.
+
 Arkivet bygges av det som ligger i `docs/`, ikke av det som ligger i `output/`.
 `output/` er gitignorert og tomt i en fersk klone; `docs/` er det som faktisk er
 publisert. Mappa heter `docs/` fordi GitHub Pages kan servere nettopp den fra
@@ -181,6 +215,12 @@ Reservert, ikke glemt. Hver av dem bygges når en konkret analyse krever det:
   siden endringen i bestanden ikke er lik den rapporterte strømmen når grensene
   har flyttet seg. En ekte dimensjonstabell er fortsatt utsatt, til noe krever
   å koble to *ulike* kilder på kommunenummer.
+- ~~**Yrkeskodedimensjon.**~~ *Bygget, som `clean.styrk`.* Terskelen var at noe
+  skulle kreve å koble to ulike kilder på samme kode, og yrkessaken gjorde det:
+  tabell 11658 og 14789 kobles på STYRK-08, og hovedgruppenavnene måtte hentes
+  fra KLASS fordi tabellene selv slår sammen to av de ti gruppene. En kodeliste
+  hentet fra kilden framfor skrevet av for hånd er det billigste stedet å ta
+  den lærdommen.
 - **Tids- og næringskodedimensjoner.** Samme regel.
 - **Deflatering som delt funksjon.** Etter andre gang den er skrevet for hånd.
 - **Inkrementell bygging.** Når full rebuild ikke lenger går på sekunder.
@@ -202,7 +242,10 @@ Reservert, ikke glemt. Hver av dem bygges når en konkret analyse krever det:
 - **Figurtypografi på små skjermer.** En fast `viewBox` skalerer teksten ned
   med bredden, så aksemerkene blir små under ~500 piksler. Løsningen er kjent —
   eget utsnitt og færre merker under et brytepunkt — og gjøres når noen leser
-  en av sakene på telefon og blir irritert.
+  en av sakene på telefon og blir irritert. Flisediagrammet gjør det verre og
+  tydeligere på én gang: der er *antall* etiketter en funksjon av
+  viewBox-oppløsningen, og 1180 enheter mot 860 er forskjellen på seks navn og
+  tjuefem. Den ble valgt for skjerm; på telefon er PNG-en fortsatt figuren.
 - **Tastaturnavigasjon i punktskyer.** Søylene kan fokuseres, nedtrekket virker,
   og tabellen har tallene. Å tabbe mellom 323 prikker er derimot ikke løst, og
   krever noe smartere enn `tabindex` på hver av dem.

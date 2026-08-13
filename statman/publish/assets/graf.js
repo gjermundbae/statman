@@ -26,7 +26,12 @@
     vekst: "var(--vekst)", fall: "var(--fall)",
     kat1: "var(--kat1)", kat2: "var(--kat2)",
     kat3: "var(--kat3)", kat4: "var(--kat4)",
-    noytral: "var(--noytral)"
+    noytral: "var(--noytral)",
+    skala1: "var(--skala1)", skala2: "var(--skala2)", skala3: "var(--skala3)",
+    skala4: "var(--skala4)", skala5: "var(--skala5)",
+    avvik1: "var(--avvik1)", avvik2: "var(--avvik2)", avvik3: "var(--avvik3)",
+    avvik4: "var(--avvik4)", avvik5: "var(--avvik5)",
+    mangler: "var(--mangler)"
   };
   function farge(tone) { return FARGE[tone] || FARGE.noytral; }
 
@@ -53,13 +58,21 @@
         x: tall(m.x, 0), y: tall(m.y, 0), size: tall(m.size, 1),
         tone: m.tone || "noytral",
         values: m.values || [], segments: m.segments || [],
-        note: m.note || "", pin: !!m.pin
+        note: m.note || "", pin: !!m.pin,
+        tones: m.tones || []
       };
     });
     spek.guides = (spek.guides || []).map(function (g) {
       return { kind: g.kind || "", at: tall(g.at, 0), labels: g.labels || [] };
     });
     spek.legend = spek.legend || [];
+    spek.layers = (spek.layers || []).map(function (l) {
+      return {
+        key: l.key || "", label: l.label || "",
+        legend: l.legend || [], caption: l.caption || ""
+      };
+    });
+    spek.layer_label = spek.layer_label || "";
     return spek;
   }
 
@@ -529,26 +542,328 @@
     return s;
   }
 
+  /* ============================================================ FLISEDIAGRAM */
+  // Squarified treemap etter Bruls, Huizing og van Wijk (2000): flatene
+  // legges radvis langs den korteste kanten, og en ny flate tas med i raden
+  // så lenge den gjør det verste sideforholdet bedre. Alternativet — å legge
+  // dem etter hverandre i én retning — gir riktige arealer, men strimler så
+  // smale at ingen kan sammenligne dem.
+  //
+  // Merk at dette er den eneste regningen fila gjør: verdi til flate, flate
+  // til piksel. Hvilken verdi flisa har, hvilken farge den skal ha i hvert
+  // lag, og hva som står i boblen, kom ferdig fra analysen.
+  function verstForhold(rad, kant) {
+    var s = 0, mx = 0, mn = Infinity, i;
+    for (i = 0; i < rad.length; i++) {
+      s += rad[i];
+      if (rad[i] > mx) mx = rad[i];
+      if (rad[i] < mn) mn = rad[i];
+    }
+    if (s <= 0 || mn <= 0) return Infinity;
+    return Math.max((kant * kant * mx) / (s * s), (s * s) / (kant * kant * mn));
+  }
+
+  function squarify(deler, x, y, b, h) {
+    // deler: [{verdi, ...}] sortert synkende. Returnerer [{del, x, y, b, h}].
+    var ut = [], igjen = [], sum = 0, i;
+    for (i = 0; i < deler.length; i++) {
+      if (deler[i].verdi > 0) { igjen.push(deler[i]); sum += deler[i].verdi; }
+    }
+    if (sum <= 0 || b <= 0 || h <= 0) return ut;
+    var skala = (b * h) / sum;
+    var areal = igjen.map(function (d) { return d.verdi * skala; });
+
+    var p = 0;
+    while (p < igjen.length) {
+      var kant = Math.min(b, h);
+      var rad = [], best = Infinity;
+      while (p + rad.length < igjen.length) {
+        var kandidat = rad.concat([areal[p + rad.length]]);
+        var forhold = verstForhold(kandidat, kant);
+        if (rad.length === 0 || forhold <= best) { best = forhold; rad = kandidat; }
+        else break;
+      }
+      var radsum = 0;
+      for (i = 0; i < rad.length; i++) radsum += rad[i];
+
+      if (b >= h) {
+        var rb = radsum / h, cy = y;
+        for (i = 0; i < rad.length; i++) {
+          var ih = rad[i] / rb;
+          ut.push({ del: igjen[p + i], x: x, y: cy, b: rb, h: ih });
+          cy += ih;
+        }
+        x += rb; b -= rb;
+      } else {
+        var rh = radsum / b, cx = x;
+        for (i = 0; i < rad.length; i++) {
+          var ib = rad[i] / rh;
+          ut.push({ del: igjen[p + i], x: cx, y: y, b: ib, h: rh });
+          cx += ib;
+        }
+        y += rh; h -= rh;
+      }
+      p += rad.length;
+    }
+    return ut;
+  }
+
+  // Gruppenavnet får bare stå der det får plass. Anslaget må være et anslag:
+  // om overskriften vises avgjør hvor mye høyde barna får, og den
+  // beslutningen må tas før de er lagt ut — altså før noe kan måles. 6,6
+  // enheter per tegn er målt på den halvfete 11,5-pikselsskriften.
+  function passer(tekst, bredde) { return tekst.length * 6.6 + 8 <= bredde; }
+
+  function tegnFliser(spek, vert, boble, g) {
+    // Større viewBox enn de andre figurene, med samme sideforhold. Skriften
+    // er 11 piksler i *viewBox*-enheter, så et grovere rutenett gir relativt
+    // mindre tekst og dermed navn på langt flere fliser. 860 enheter ga navn
+    // på seks av fire hundre; 1180 gir det på rundt tjuefem. Prisen er at
+    // figuren tåler mindre nedskalering før teksten blir liten — den er
+    // «full» bredde nettopp derfor, og PNG-en er der for resten.
+    var B = 1180, H = 760, luft = 3, tittelhoyde = 15;
+    var s = el("svg", {
+      viewBox: "0 0 " + B + " " + H, role: "img", "aria-label": spek.alt
+    });
+
+    // Skravur for «ikke publisert». Egen id per figur, ellers ville to
+    // figurer på samme side delt mønster og den ene mistet sitt.
+    var merkelapp = "skravur-" + Math.random().toString(36).slice(2, 8);
+    var defs = el("defs");
+    var mnst = el("pattern", {
+      id: merkelapp, width: 7, height: 7,
+      patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)"
+    });
+    mnst.appendChild(el("rect", { width: 7, height: 7, fill: "var(--mangler)" }));
+    mnst.appendChild(el("line", {
+      x1: 0, y1: 0, x2: 0, y2: 7, stroke: "var(--mangler-strek)", "stroke-width": 2.5
+    }));
+    defs.appendChild(mnst);
+    s.appendChild(defs);
+    function flatefyll(tone) {
+      return tone === "mangler" ? "url(#" + merkelapp + ")" : farge(tone);
+    }
+
+    // To nivåer: hovedgruppene deler flaten, yrkene deler gruppa si. Uten
+    // grupperingen blir 400 fliser en tilfeldig mosaikk; med den kan leseren
+    // se at helse er stort før hen leser et eneste navn.
+    var bolker = {}, rekke = [];
+    spek.marks.forEach(function (m) {
+      if (!(m.size > 0)) return;          // en flate uten areal er ikke en flate
+      if (!bolker[m.group]) { bolker[m.group] = { navn: m.group, verdi: 0, barn: [] }; rekke.push(bolker[m.group]); }
+      bolker[m.group].verdi += m.size;
+      bolker[m.group].barn.push(m);
+    });
+    if (!rekke.length) throw new Error("ingen fliser med areal");
+    rekke.sort(function (a, b) { return b.verdi - a.verdi; });
+    rekke.forEach(function (bolk) {
+      bolk.barn.sort(function (a, b) { return b.size - a.size; });
+    });
+
+    var lag = el("g");
+    s.appendChild(lag);
+
+    squarify(rekke.map(function (b) { return { verdi: b.verdi, bolk: b }; }), 0, 0, B, H)
+      .forEach(function (celle) {
+        var bolk = celle.del.bolk;
+        var x = celle.x + luft / 2, y = celle.y + luft / 2;
+        var b = Math.max(0, celle.b - luft), h = Math.max(0, celle.h - luft);
+        // Gruppenavnet får en egen stripe på toppen, men bare når gruppa er
+        // stor nok til at stripa ikke spiser opp flisene den navngir.
+        var topp = 0;
+        if (h > 46 && passer(bolk.navn, b)) {
+          lag.appendChild(txt(el("text", {
+            class: "flis-gruppe", x: x + 1, y: y + 11
+          }), bolk.navn));
+          topp = tittelhoyde;
+        }
+        squarify(bolk.barn.map(function (m) { return { verdi: m.size, mark: m }; }),
+                 x, y + topp, b, Math.max(0, h - topp))
+          .forEach(function (c) {
+            var m = c.del.mark;
+            m._x = c.x; m._y = c.y; m._b = c.b; m._h = c.h;
+            m._el = el("rect", {
+              class: "flis", x: c.x, y: c.y,
+              width: Math.max(0, c.b), height: Math.max(0, c.h), rx: 1
+            });
+            lag.appendChild(m._el);
+          });
+        // Ramma tegnes alltid, også når navnet ikke fikk plass. Fire av de ti
+        // gruppene har for lange navn til boksene sine, og uten ei ramme ville
+        // flisene deres sett ut som en fortsettelse av nabogruppa. Hvilken
+        // gruppe en flis hører til står uansett i boblen.
+        lag.appendChild(el("rect", {
+          class: "flis-ramme", x: x - 1, y: y - 1,
+          width: b + 2, height: h + 2, rx: 2
+        }));
+      });
+
+    // Etikettene legges over alle flisene, ellers ville nabofliser lagt seg
+    // oppå teksten til den forrige.
+    //
+    // Bredden måles, ikke anslås. Her finnes ingen layout som venter på
+    // svaret — en etikett som ikke får plass fjernes bare igjen — og da er
+    // det ingen grunn til å gjette på tegnbredder. En avkortet etikett er
+    // verre enn ingen, for den ser ut som navnet på et annet yrke.
+    // getBBox krever at figuren står i dokumentet, så dette kjøres av
+    // hovedløkka rett etter at den er satt inn.
+    var tekster = el("g");
+    lag.appendChild(tekster);
+    s._etiketter = function () {
+      tekster.replaceChildren();
+      spek.marks.forEach(function (m) {
+        if (!m._el || m._b < 30 || m._h < 15) return;
+        var plass = m._b - 7;
+        var navn = txt(el("text", { class: "flis-navn", x: m._x + 4, y: m._y + 12.5 }), m.label);
+        tekster.appendChild(navn);
+        if (navn.getBBox().width > plass) { navn.remove(); return; }
+        if (m._h < 31 || !m.note) return;
+        var tall = txt(el("text", { class: "flis-tall", x: m._x + 4, y: m._y + 25 }), m.note);
+        tekster.appendChild(tall);
+        if (tall.getBBox().width > plass) tall.remove();
+      });
+    };
+
+    var valgtramme = el("rect", { class: "flis-valgt", x: 0, y: 0, width: 0, height: 0, opacity: 0 });
+    lag.appendChild(valgtramme);
+
+    // Én fangstflate framfor en lytter per flis: 400 lyttere er 400 lyttere.
+    var flate = el("rect", { class: "flis-flate", x: 0, y: 0, width: B, height: H, fill: "transparent" });
+    lag.appendChild(flate);
+
+    function ved(ev) {
+      var ctm = s.getScreenCTM();
+      if (!ctm) return null;
+      var p = s.createSVGPoint();
+      p.x = ev.clientX; p.y = ev.clientY;
+      p = p.matrixTransform(ctm.inverse());
+      var treff = null;
+      spek.marks.forEach(function (m) {
+        if (!m._el) return;
+        if (g.filter && m.group !== g.filter) return;
+        if (p.x >= m._x && p.x <= m._x + m._b && p.y >= m._y && p.y <= m._y + m._h) treff = m;
+      });
+      return treff;
+    }
+
+    flate.addEventListener("pointermove", function (ev) {
+      var m = ved(ev);
+      if (!m) return visBoble(boble, vert, null);
+      var r = s.getBoundingClientRect(), k = r.width / B;
+      visBoble(boble, vert, m, r.left + (m._x + m._b / 2) * k, r.top + m._y * k);
+    });
+    flate.addEventListener("pointerleave", function () { visBoble(boble, vert, null); });
+    flate.addEventListener("click", function (ev) {
+      var m = ved(ev);
+      velg(g, m && m.label !== g.valgt ? m.label : null);
+    });
+
+    // Lagbytte er bare en ny fylling per flis. Layouten ligger fast, så
+    // leseren kan følge én flis gjennom alle lagene.
+    s._settLag = function (i) {
+      spek.marks.forEach(function (m) {
+        if (!m._el) return;
+        var tone = spek.layers.length ? (m.tones[i] || "mangler") : m.tone;
+        m._el.setAttribute("fill", flatefyll(tone));
+      });
+    };
+    s._settLag(0);
+
+    g.lyttere.push(function (valgt, filter) {
+      spek.marks.forEach(function (m) {
+        if (!m._el) return;
+        m._el.classList.toggle("valgt", m.label === valgt);
+        m._el.classList.toggle("i-gruppe", !!filter && m.group === filter);
+      });
+      s.classList.toggle("dempet", !!valgt || !!filter);
+      var m = valgt && spek.marks.find(function (a) { return a.label === valgt && a._el; });
+      if (m) {
+        valgtramme.setAttribute("x", m._x); valgtramme.setAttribute("y", m._y);
+        valgtramme.setAttribute("width", m._b); valgtramme.setAttribute("height", m._h);
+        valgtramme.setAttribute("opacity", 1);
+      } else {
+        valgtramme.setAttribute("opacity", 0);
+      }
+    });
+    return s;
+  }
+
   /* ------------------------------------------------------------ tegnforklaring */
-  function lagTegn(spek, bredde) {
-    if (!spek.legend || !spek.legend.length) return null;
-    var d = document.createElement("div");
-    d.className = "graf-tegn " + (bredde === "full" ? "full" : "bred");
-    spek.legend.forEach(function (par) {
+  function fyllTegn(d, poster) {
+    d.replaceChildren();
+    (poster || []).forEach(function (par) {
       var w = document.createElement("span");
       var i = document.createElement("i");
-      i.style.background = farge(par[0]);
+      // Skravuren i figuren kan ikke gjentas i en 12 pikslers rute. Prikket
+      // kantstrek gjør den samme jobben: «dette er ikke en verdi».
+      if (par[0] === "mangler") {
+        // Skravuren gjentas i ruta, ikke bare fargen. Ellers ville
+        // tegnforklaringen vist en grå flate figuren ikke har noe sted.
+        i.style.background =
+          "repeating-linear-gradient(45deg, var(--mangler) 0 2px, var(--mangler-strek) 2px 4px)";
+      } else {
+        i.style.background = farge(par[0]);
+      }
       w.appendChild(i);
       w.appendChild(document.createTextNode(par[1]));
       d.appendChild(w);
     });
+  }
+
+  function lagTegn(spek, bredde) {
+    var poster = spek.layers.length ? spek.layers[0].legend : spek.legend;
+    if (!poster || !poster.length) return null;
+    var d = document.createElement("div");
+    d.className = "graf-tegn " + (bredde === "full" ? "full" : "bred");
+    fyllTegn(d, poster);
     return d;
   }
 
   /* ------------------------------------------------------------- styrepanelet */
-  function lagStyring(spek, g) {
+  // Lagknappene, når figuren kan farges på flere måter. Knapper og ikke et
+  // nedtrekk: lagene er få, og poenget er å bla mellom dem og se den samme
+  // flaten skifte betydning.
+  function lagLagvelger(spek, svg, tegn, tekst) {
+    var felt = document.createElement("div");
+    var etikett = document.createElement("label");
+    felt.appendChild(txt(etikett, spek.layer_label || "Farg etter"));
+
+    var rad = document.createElement("div");
+    rad.className = "graf-lag";
+    rad.setAttribute("role", "group");
+    rad.setAttribute("aria-label", spek.layer_label || "Farg etter");
+    var knapper = [];
+
+    function vis(i) {
+      svg._settLag(i);
+      knapper.forEach(function (k, j) { k.setAttribute("aria-pressed", j === i ? "true" : "false"); });
+      if (tegn) fyllTegn(tegn, spek.layers[i].legend);
+      if (tekst) txt(tekst, spek.layers[i].caption);
+      svg.setAttribute("aria-label", spek.alt + " Farget etter: " + spek.layers[i].label + ".");
+    }
+
+    spek.layers.forEach(function (l, i) {
+      var k = document.createElement("button");
+      k.type = "button";
+      k.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+      txt(k, l.label);
+      k.addEventListener("click", function () { vis(i); });
+      rad.appendChild(k);
+      knapper.push(k);
+    });
+    felt.appendChild(rad);
+    vis(0);
+    return felt;
+  }
+
+  function lagStyring(spek, g, svg, tegn, tekst) {
     var boks = document.createElement("div");
     boks.className = "graf-styring " + (spek.width === "full" ? "full" : "bred");
+
+    if (spek.layers.length && svg && svg._settLag) {
+      boks.appendChild(lagLagvelger(spek, svg, tegn, tekst));
+    }
+    if (!spek.picker) return boks;
 
     var id = "graf-velg-" + Math.random().toString(36).slice(2, 8);
     var felt = document.createElement("div");
@@ -665,6 +980,7 @@
       if (spek.kind === "scatter") s = tegnSpredning(spek, flate, boble, g);
       else if (spek.kind === "strip") s = tegnStripe(spek, flate, boble, g);
       else if (spek.kind === "bars") s = tegnSoyler(spek, flate, boble, g);
+      else if (spek.kind === "treemap") s = tegnFliser(spek, flate, boble, g);
     } catch (e) {
       s = null;
     }
@@ -672,10 +988,24 @@
 
     flate.insertBefore(s, boble);
     fig.classList.add("tegnet");
+    // Etiketter som må måles, måles først når figuren står i dokumentet.
+    if (s._etiketter) { try { s._etiketter(); } catch (e) { /* uten mål, ingen navn */ } }
 
     var tegn = lagTegn(spek, spek.width);
+    // Bildeteksten som hører til det valgte laget, ikke til figuren. Den
+    // fylles av lagvelgeren, så den lages tom her.
+    var lagtekst = null;
+    if (spek.layers.length) {
+      lagtekst = document.createElement("p");
+      lagtekst.className = "graf-lagtekst " + (spek.width === "full" ? "full" : "bred");
+    }
     if (tegn) fig.parentNode.insertBefore(tegn, fig);
-    if (spek.picker) fig.parentNode.insertBefore(lagStyring(spek, g), tegn || fig);
+    if (lagtekst) fig.parentNode.insertBefore(lagtekst, fig);
+    if (spek.picker || spek.layers.length) {
+      fig.parentNode.insertBefore(
+        lagStyring(spek, g, s, tegn, lagtekst), tegn || lagtekst || fig
+      );
+    }
   });
 
   Object.keys(grupper).forEach(function (navn) { meld(grupper[navn]); });

@@ -1,0 +1,233 @@
+"""Det norske arbeidsmarkedet, ett rad per yrke.
+
+Kobler seks utsnitt av SSBs yrkesstatistikk til én analyseklar tabell med
+407 rader — de fireside yrkene i STYRK-08. Valgene som tas her, og hvorfor:
+
+**Grainet er fireside STYRK-08, og partisjonen er eksakt.** De 407 yrkene
+summerer seg til nøyaktig det SSB publiserer på ``0-9`` («Alle yrker») både
+i start- og sluttkvartalet. Det er ikke en tilfeldighet, det er en
+egenskap ved klassifikasjonen — og det er sjekken som gjør et flisediagram
+forsvarlig. En flise-figur påstår at flatene *er* helheten; er summen bare
+omtrent totalen, er påstanden feil uten at figuren ser feil ut.
+
+**Medianlønn på 0 er ikke en lønn.** SSB skriver 0 der det ikke er noen å
+regne median for — det gjelder åtte kjønnsdelte celler i de minste yrkene.
+Vi gjør dem til null. En nullkrone som får være med, drar enhver
+gjennomsnitts- eller ytterpunktsliste med seg.
+
+**Vekst regnes bare der den betyr noe.** ``sammenlignbar`` krever minst
+:data:`MINSTE_YRKE` lønnstakere i *begge* endene av perioden, og at yrket
+ikke ligger i hovedgruppe 0. Begge deler er én regel hver:
+
+* Under et par hundre ansatte flytter én arbeidsgivers omorganisering
+  prosenten mer enn arbeidsmarkedet gjør. Terskelen holder 99 prosent av
+  lønnstakerne inne, og er dermed ikke det som avgjør noen av funnene —
+  se metodeavsnittet i sakspakken, som regner ut følsomheten.
+* Hovedgruppe 0 er «Militære yrker og uoppgitt», og ingen av delene tåler
+  en tiårsserie. Forsvaret innførte spesialistordningen (OR/OF) i 2016, og
+  omkodingen alene sender «Befal med sersjant grad» opp 365 prosent og
+  «Offiserer fra fenrik og høyere grad» ned 51. Det er en reform i
+  kodeverket, ikke i arbeidsmarkedet. «Uoppgitt» er på sin side ikke et
+  yrke i det hele tatt, men de som mangler yrkeskode — en gruppe som selv
+  falt fra 19 600 til 7 600 fordi registreringen ble bedre.
+
+Yrkene som holdes utenfor rangeringen ligger fortsatt i tabellen, og
+fortsatt i flisediagrammet. De er en del av arbeidsmarkedet; de er bare
+ikke noe man kan regne tiårsvekst for.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Final
+
+from statman.registry import Context, model
+
+# Perioden. Samme kvartal i hver ende, så sesongvariasjon ikke telles som
+# vekst — antall lønnstakere svinger systematisk gjennom året.
+PERIODE_AAR: Final[int] = 10
+
+# Nedre grense for å bli rangert på prosentvekst. Se moduldocstringen.
+MINSTE_YRKE: Final[int] = 500
+
+# Hovedgruppa som holdes utenfor rangeringen: militære yrker og uoppgitt.
+UTENFOR_HOVEDGRUPPE: Final[str] = "0"
+
+
+@model(
+    name="mart.arbeidsmarked_yrke",
+    deps=[
+        "clean.styrk",
+        "clean.yrke_kvartal",
+        "clean.yrke_siste",
+        "clean.yrke_kjonn",
+        "clean.yrke_alder",
+        "clean.yrke_sykefravaer",
+    ],
+    checks=[
+        "unique:yrke",
+        "not_null:yrke_navn",
+        "not_null:hovedgruppe_navn",
+        "length(yrke) = 4",
+        # Flisediagrammets grunnforutsetning: hver flate har en positiv
+        # eller null størrelse, og ingen mangler.
+        "lonnstakere >= 0",
+        # En median på null kroner skal være fjernet, ikke beholdt.
+        "median_lonn is null or median_lonn > 0",
+        # Null er tillatt, og betyr noe: sju av de 407 yrkene har ingen
+        # lønnstakere igjen i det hele tatt, og en andel av null personer
+        # er ikke null prosent — den finnes ikke. De blir flater uten
+        # areal i figuren, og faller ut av enhver andelsberegning.
+        "kvinneandel is null or kvinneandel between 0 and 1",
+        "andel_55plus is null or andel_55plus between 0 and 1",
+        # Kjønnene og aldersbåndene skal dele opp nøyaktig den samme
+        # bestanden som totalen. Er de ikke det, har vi koblet feil kvartal.
+        "kvinner + menn = lonnstakere",
+        "under_40 + fra_40_til_54 + fra_55 = lonnstakere",
+    ],
+    doc="Ett rad per fireside STYRK-08-yrke: bestand, lønn, kjønn, alder, sykefravær og tiårsvekst.",
+)
+def mart_arbeidsmarked_yrke(ctx: Context) -> Any:
+    return ctx.sql(f"""
+        with grenser as (
+            select
+                max(kvartal)                                          as kvartal_slutt,
+                (cast(substr(max(kvartal), 1, 4) as integer) - {PERIODE_AAR})
+                    || substr(max(kvartal), 5, 2)                      as kvartal_start
+            from clean_yrke_kvartal
+        ),
+        bestand as (
+            select
+                k.yrke,
+                max(case when k.kvartal = g.kvartal_slutt then k.lonnstakere end) as lonnstakere,
+                max(case when k.kvartal = g.kvartal_start then k.lonnstakere end) as lonnstakere_start
+            from clean_yrke_kvartal k, grenser g
+            where k.kvartal in (g.kvartal_start, g.kvartal_slutt)
+            group by k.yrke
+        ),
+        siste as (
+            select
+                yrke,
+                any_value(yrke_navn)                                            as yrke_navn,
+                max(case when variabel = 'medianmndlonn' then verdi end)         as median_lonn,
+                max(case when variabel = 'gjsnalder'     then verdi end)         as gjennomsnittsalder,
+                max(case when variabel = 'gjavtarbtid'   then verdi end)         as avtalt_arbeidstid
+            from clean_yrke_siste
+            group by yrke
+        ),
+        kjonn as (
+            select
+                yrke,
+                max(case when kjonn = 'kvinner' and variabel = 'lonsstakere'   then verdi end) as kvinner,
+                max(case when kjonn = 'menn'    and variabel = 'lonsstakere'   then verdi end) as menn,
+                max(case when kjonn = 'kvinner' and variabel = 'medianmndlonn' then verdi end) as lonn_kvinner,
+                max(case when kjonn = 'menn'    and variabel = 'medianmndlonn' then verdi end) as lonn_menn
+            from clean_yrke_kjonn
+            group by yrke
+        ),
+        alder as (
+            select
+                yrke,
+                max(case when aldersgruppe = '0-39'  then lonnstakere end) as under_40,
+                max(case when aldersgruppe = '40-54' then lonnstakere end) as fra_40_til_54,
+                max(case when aldersgruppe = '55+'   then lonnstakere end) as fra_55
+            from clean_yrke_alder
+            group by yrke
+        ),
+        sykefravaer as (
+            select yrke, aar as sykefravaer_aar, sykefravaer_pst
+            from clean_yrke_sykefravaer
+            qualify row_number() over (partition by yrke order by aar desc) = 1
+        )
+        select
+            y.kode                                              as yrke,
+            s.yrke_navn                                         as yrke_navn,
+            substr(y.kode, 1, 1)                                as hovedgruppe,
+            h.navn                                              as hovedgruppe_navn,
+            substr(y.kode, 1, 2)                                as yrkesgruppe,
+            yg.navn                                             as yrkesgruppe_navn,
+
+            cast(b.lonnstakere as bigint)                       as lonnstakere,
+            cast(b.lonnstakere_start as bigint)                 as lonnstakere_start,
+            cast(b.lonnstakere - b.lonnstakere_start as bigint) as vekst_antall,
+            -- Null der utgangspunktet er null: en vekst fra ingen ansatte er
+            -- ikke en prosent, uansett hvor mange som kom til.
+            case when b.lonnstakere_start > 0
+                 then b.lonnstakere / cast(b.lonnstakere_start as double) - 1
+            end                                                 as vekst_pst,
+
+            -- Se moduldocstringen: kildens 0 betyr «ingen å regne på».
+            nullif(s.median_lonn, 0)                            as median_lonn,
+            nullif(k.lonn_kvinner, 0)                           as median_lonn_kvinner,
+            nullif(k.lonn_menn, 0)                              as median_lonn_menn,
+            s.gjennomsnittsalder                                as gjennomsnittsalder,
+            s.avtalt_arbeidstid                                 as avtalt_arbeidstid,
+
+            cast(k.kvinner as bigint)                           as kvinner,
+            cast(k.menn as bigint)                              as menn,
+            -- nullif, ikke bare en cast: 0/0 er NaN i IEEE-flyttall, og en
+            -- NaN sklir gjennom «is null» og havner i figuren som et hull
+            -- ingen sjekk fanget.
+            k.kvinner / nullif(cast(b.lonnstakere as double), 0) as kvinneandel,
+
+            cast(a.under_40 as bigint)                          as under_40,
+            cast(a.fra_40_til_54 as bigint)                     as fra_40_til_54,
+            cast(a.fra_55 as bigint)                            as fra_55,
+            a.fra_55 / nullif(cast(b.lonnstakere as double), 0) as andel_55plus,
+
+            f.sykefravaer_pst                                   as sykefravaer_pst,
+            f.sykefravaer_aar                                   as sykefravaer_aar,
+
+            b.lonnstakere_start >= {MINSTE_YRKE}
+                and b.lonnstakere >= {MINSTE_YRKE}
+                and substr(y.kode, 1, 1) <> '{UTENFOR_HOVEDGRUPPE}' as sammenlignbar,
+
+            g.kvartal_start                                     as kvartal_start,
+            g.kvartal_slutt                                     as kvartal_slutt
+        from clean_styrk y
+        cross join grenser g
+        join siste       s  on s.yrke = y.kode
+        join bestand     b  on b.yrke = y.kode
+        join clean_styrk h  on h.kode = substr(y.kode, 1, 1)
+        join clean_styrk yg on yg.kode = substr(y.kode, 1, 2)
+        left join kjonn       k on k.yrke = y.kode
+        left join alder       a on a.yrke = y.kode
+        left join sykefravaer f on f.yrke = y.kode
+        where y.nivaa = 4
+        order by b.lonnstakere desc, y.kode
+    """)
+
+
+@model(
+    name="mart.arbeidsmarked_hovedgruppe_kvartal",
+    deps=["clean.styrk", "clean.yrke_kvartal"],
+    checks=[
+        "unique:hovedgruppe,kvartal",
+        "not_null:hovedgruppe_navn",
+        "lonnstakere > 0",
+        "length(hovedgruppe) = 1",
+    ],
+    doc="Lønnstakere per STYRK-hovedgruppe og kvartal, summert opp fra de 407 yrkene.",
+)
+def mart_arbeidsmarked_hovedgruppe_kvartal(ctx: Context) -> Any:
+    """Hovedgruppene over tid.
+
+    Summert opp fra fireside yrker og ikke hentet fra SSBs egne
+    ensifrede koder, av samme grunn som at kommunesaken tar fylkestall fra
+    fylkesserien: kildens ensifrede nivå er ikke komplett. Tabell 11658
+    slår sammen militære yrker og høyskoleyrker til én kode ``3_01-03``,
+    så to av de ti hovedgruppene finnes ikke der. Summen over yrkene har
+    dem, og summerer seg til den samme totalen.
+    """
+    return ctx.sql("""
+        select
+            substr(k.yrke, 1, 1)      as hovedgruppe,
+            h.navn                    as hovedgruppe_navn,
+            k.kvartal                 as kvartal,
+            sum(k.lonnstakere)        as lonnstakere
+        from clean_yrke_kvartal k
+        join clean_styrk y on y.kode = k.yrke and y.nivaa = 4
+        join clean_styrk h on h.kode = substr(k.yrke, 1, 1)
+        group by 1, 2, 3
+        having sum(k.lonnstakere) > 0
+        order by hovedgruppe, kvartal
+    """)

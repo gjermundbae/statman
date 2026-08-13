@@ -104,7 +104,29 @@ class Table:
 # blir. Slik kan paletten byttes ett sted når den ikke består
 # fargeblindhetssjekken, uten å røre en eneste analyse. Rekkefølgen er fast:
 # «kat3» tas i bruk fordi det er en tredje kategori, aldri fordi den ser fin ut.
-TONES: tuple[str, ...] = ("vekst", "fall", "kat1", "kat2", "kat3", "kat4", "noytral")
+TONES_KATEGORI: tuple[str, ...] = ("vekst", "fall", "kat1", "kat2", "kat3", "kat4", "noytral")
+
+# De to ordnede vokabularene. Forskjellen fra de kategoriske er ikke at de er
+# flere, men at *rekkefølgen bærer mening*: skala3 ligger mellom skala2 og
+# skala4, og det gjør den i alle tre fargesyn fordi lysheten er monoton.
+# Kategoriske roller har ingen rekkefølge, og skal ikke brukes til å vise en
+# mengde. Å velge hvilket trinn en verdi havner på er en inndeling, altså et
+# valg, og hører derfor i analysen — ikke her.
+TONES_SKALA: tuple[str, ...] = ("skala1", "skala2", "skala3", "skala4", "skala5")
+
+# Divergerende: avvik3 er midten, og de to endene peker hver sin vei. Brukes
+# der fortegnet er poenget — vekst mot nedgang — og aldri der verdien bare er
+# stor eller liten.
+TONES_AVVIK: tuple[str, ...] = ("avvik1", "avvik2", "avvik3", "avvik4", "avvik5")
+
+# Ikke en verdi, men fraværet av en. Egen rolle framfor «noytral», fordi
+# «kilden publiserer ikke dette tallet» og «tallet er null» er to forskjellige
+# opplysninger som ikke skal se like ut.
+TONE_MANGLER: str = "mangler"
+
+TONES: tuple[str, ...] = (
+    *TONES_KATEGORI, *TONES_SKALA, *TONES_AVVIK, TONE_MANGLER
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +168,25 @@ class Guide:
 
 
 @dataclass(frozen=True, slots=True)
+class Layer:
+    """Ett fargelag i en figur som kan farges på flere måter.
+
+    Et flisediagram har én oppdeling av flaten og mange måter å farge den
+    på: lønn, kvinneandel, vekst, alder. Laget er den ene av dem, med
+    tegnforklaringen som gjelder akkurat den.
+
+    ``legend`` er ``(tone, tekst)`` og forklarer hva trinnene betyr *i dette
+    laget* — «under 40 000 kr», ikke «skala1». Uten den er en ordnet skala
+    bare fem farger.
+    """
+
+    key: str
+    label: str
+    legend: tuple[tuple[str, str], ...] = ()
+    caption: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class Mark:
     """Ett merke: en prikk i en sky, en strek i en stripe, en rad med søyler.
 
@@ -153,6 +194,9 @@ class Mark:
     ``(tone, verdi)`` for stablede søyler; positive ledd vokser høyre for
     null, negative venstre, slik at et negativt bidrag trekker totalen ned
     i stedet for å legge seg oppå.
+
+    ``tones`` er én rolle per lag i en figur med :class:`Layer`-lag, i samme
+    rekkefølge som lagene. ``tone`` gjelder når figuren ikke har lag.
     """
 
     label: str
@@ -165,6 +209,7 @@ class Mark:
     segments: tuple[tuple[str, float], ...] = ()
     note: str = ""
     pin: bool = False
+    tones: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,6 +245,8 @@ class Chart:
     caption: str = ""
     source: str = ""
     width: str = "bred"
+    layers: tuple[Layer, ...] = ()
+    layer_label: str = ""
 
     def spec(self) -> dict[str, Any]:
         """Figuren som json-klare data — det sida får å tegne etter."""
@@ -208,14 +255,22 @@ class Chart:
     def tones(self) -> tuple[str, ...]:
         """Alle fargeroller figuren viser til. Brukes av ``validate``."""
         brukt: list[str] = [tone for tone, _ in self.legend]
+        for lag in self.layers:
+            brukt += [tone for tone, _ in lag.legend]
         for mark in self.marks:
             brukt.append(mark.tone)
+            brukt += mark.tones
             brukt += [tone for tone, _ in mark.segments]
             brukt += [r.tone for r in mark.values if r.tone]
         return tuple(brukt)
 
 
-KINDS: tuple[str, ...] = ("scatter", "strip", "bars")
+KINDS: tuple[str, ...] = ("scatter", "strip", "bars", "treemap")
+
+# Figurtyper som kan farges på flere måter. Lag på en figurtype som ikke står
+# her ville blitt skrevet til fila og aldri tegnet — leseren hadde fått en
+# velger som ikke gjorde noe.
+KINDS_MED_LAG: tuple[str, ...] = ("treemap",)
 
 Block = Union[Prose, Findings, Stats, Figure, Table, Chart]
 
@@ -476,6 +531,52 @@ def _sjekk_figur(chart: Chart, seksjon: str) -> list[str]:
     if chart.picker and not chart.link:
         feil.append(f"{hvor} har en picker uten link, og styrer da ingenting")
 
+    feil += _sjekk_lag(chart, hvor)
+
+    if chart.kind == "treemap":
+        # Flatene *er* påstanden i et flisediagram: at de til sammen utgjør
+        # helheten. En negativ størrelse har ingen flate å være, og en figur
+        # der alt er null har ingen flate i det hele tatt.
+        if any(m.size < 0 for m in chart.marks):
+            feil.append(f"{hvor} er et flisediagram med negative størrelser")
+        if not any(m.size > 0 for m in chart.marks):
+            feil.append(f"{hvor} er et flisediagram der ingen flate har størrelse")
+
+    return feil
+
+
+def _sjekk_lag(chart: Chart, hvor: str) -> list[str]:
+    """Sjekkene på fargelag. Hver av dem skal kunne feile."""
+    feil: list[str] = []
+
+    if chart.layers and chart.kind not in KINDS_MED_LAG:
+        feil.append(
+            f"{hvor} har fargelag, men {chart.kind!r} tegnes uten dem. "
+            f"Typer med lag: {', '.join(KINDS_MED_LAG)}"
+        )
+    if chart.layer_label and not chart.layers:
+        feil.append(f"{hvor} har en lagvelger uten lag, og styrer da ingenting")
+
+    if not chart.layers:
+        return feil
+
+    nokler = [lag.key for lag in chart.layers]
+    if len(set(nokler)) != len(nokler):
+        feil.append(f"{hvor} har to fargelag med samme nøkkel")
+    for lag in chart.layers:
+        if not lag.key or not lag.label:
+            feil.append(f"{hvor} har et fargelag uten nøkkel eller etikett")
+
+    # Et merke som mangler en rolle i ett av lagene ville blitt usynlig i
+    # nettopp det laget, og bare der. Det er den slags feil som ikke oppdages
+    # før noen bytter lag i nettleseren.
+    ventet = len(chart.layers)
+    mangler = [m.label for m in chart.marks if len(m.tones) != ventet]
+    if mangler:
+        feil.append(
+            f"{hvor} har {ventet} fargelag, men {len(mangler)} merker oppgir "
+            f"et annet antall roller (f.eks. {mangler[0]!r})"
+        )
     return feil
 
 
@@ -493,7 +594,7 @@ def _block_to_dict(block: Block) -> dict[str, Any]:
 # ikke sier noe. Lesingen fyller standardverdiene inn igjen, så rundturen er
 # uendret. Bare de nye typene komprimeres — de gamle blokkene skal beholde
 # formen sin, så ingen publisert artikkel.json endrer seg uten grunn.
-_KOMPAKTE: tuple[type, ...] = (Axis, Readout, Guide, Mark)
+_KOMPAKTE: tuple[type, ...] = (Axis, Readout, Guide, Mark, Layer)
 
 
 def _plain(value: Any) -> Any:
@@ -563,6 +664,15 @@ def _chart_from_dict(data: dict[str, Any]) -> Chart:
             segments=tuple((str(t), float(v)) for t, v in rå.get("segments") or ()),
             note=str(rå.get("note", "")),
             pin=bool(rå.get("pin", False)),
+            tones=tuple(str(t) for t in rå.get("tones") or ()),
+        )
+
+    def lag(rå: dict[str, Any]) -> Layer:
+        return Layer(
+            key=str(rå.get("key", "")),
+            label=str(rå.get("label", "")),
+            legend=tuple((str(t), str(s)) for t, s in rå.get("legend") or ()),
+            caption=str(rå.get("caption", "")),
         )
 
     return Chart(
@@ -587,6 +697,8 @@ def _chart_from_dict(data: dict[str, Any]) -> Chart:
         caption=str(data.get("caption", "")),
         source=str(data.get("source", "")),
         width=str(data.get("width", "bred")),
+        layers=tuple(lag(l) for l in data.get("layers") or ()),
+        layer_label=str(data.get("layer_label", "")),
     )
 
 

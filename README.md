@@ -76,6 +76,12 @@ kommuneinndelingen — femten år dekker to kommunereformer, en kommunedeling og
 et titalls grensejusteringer. Begrunnelsen for hvordan det håndteres står i
 `statman/models/mart_befolkning.py`, ikke her.
 
+**`arbeidsmarked`** kobler seks utsnitt av SSBs yrkesstatistikk til 407 yrker i
+STYRK-08, og tegner dem som et flisediagram med seks fargelag. Det tunge der er
+å vite hvilke yrker som *ikke* tåler en tiårsserie: en omkoding i Forsvaret ser
+ut som 365 prosent vekst, og «Uoppgitt» er ikke et yrke. Se
+`statman/models/mart_arbeidsmarked.py`.
+
 ## Analyse
 
 ```python
@@ -160,7 +166,7 @@ en PNG under seg for den som ikke har JavaScript:
 
 ```python
 publish.Chart(
-    kind="scatter",                     # scatter · strip · bars
+    kind="scatter",                     # scatter · strip · bars · treemap
     marks=(
         publish.Mark(
             label="Ibestad", group="Troms",
@@ -185,6 +191,42 @@ opp i alle sammen. Nøyaktig én av dem setter `picker`.
 farge. Hvilken grønn «vekst» blir står i `publish/assets/graf.css`, sammen med
 målingene som viser at den kan skilles fra `fall` av en leser som ikke ser rødt.
 En ukjent rolle stopper publiseringen.
+
+Ved siden av de kategoriske rollene finnes to *ordnede* skalaer, der rekkefølgen
+bærer mening: `skala1`…`skala5` stiger, `avvik1`…`avvik5` divergerer om en midte,
+og `mangler` er ikke en verdi, men fraværet av en. Hvilket trinn en verdi havner
+på er en inndeling, altså et valg, og gjøres i analysen.
+
+### Flisediagram med flere fargelag
+
+`kind="treemap"` deler flaten etter `size` og grupperer på `group`. Den kan
+farges på flere måter samtidig, én `Layer` per måte:
+
+```python
+publish.Chart(
+    kind="treemap",
+    layers=(
+        publish.Layer("lonn", "Median månedslønn",
+                      legend=(("skala1", "under 40 000 kr"),
+                              ("skala5", "75 000 kr og over"))),
+        publish.Layer("vekst", "Endring på 10 år",
+                      legend=(("avvik1", "ned over 20 %"),
+                              ("avvik5", "opp over 25 %"))),
+    ),
+    layer_label="Farg flisene etter",
+    marks=(
+        publish.Mark(label="Sykepleiere", group="Akademiske yrker",
+                     size=59306, tones=("skala5", "avvik4")),
+    ),
+    fallback="fliser.png", alt="…",
+)
+```
+
+`tones` er én rolle per lag, i lagenes rekkefølge — ett merke som mangler en av
+dem stopper publiseringen, for det ville blitt usynlig i nøyaktig ett lag.
+Oppdelingen regnes ut i sida (squarified treemap); analysen sier bare hvor stor
+en flate er. PNG-en under kan bare vise ett av lagene, og det skal stå i
+bildeteksten hvilket.
 
 Alt annet gjelder som før: tallene kommer ferdig formatert, og sida verken
 teller, summerer eller velger utvalg. Den regner bare ut hvor på skjermen et

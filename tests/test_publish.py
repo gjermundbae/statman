@@ -21,6 +21,7 @@ from statman.publish.article import (
     Figure,
     Findings,
     Guide,
+    Layer,
     Mark,
     Prose,
     Readout,
@@ -385,3 +386,136 @@ def test_ukjent_sakspakke_sier_fra(katalog: Path) -> None:
 def test_ingenting_å_publisere_sier_fra(project: Path) -> None:
     with pytest.raises(site.PublishError, match="Fant ingen sakspakker"):
         site.publish_all()
+
+
+# --------------------------------------------------------------------------
+# Flisediagram og fargelag
+# --------------------------------------------------------------------------
+def lag_fliser(**endringer) -> Chart:
+    grunn = dict(
+        kind="treemap",
+        marks=(
+            Mark(label="Sykepleiere", group="Akademiske yrker", size=59306.0,
+                 tones=("skala5", "avvik4"), note="59 306",
+                 values=(Readout("Lønnstakere", "59 306"),)),
+            Mark(label="Førtrykkere", group="Håndverkere", size=759.0,
+                 tones=("skala2", "avvik1"), note="759"),
+        ),
+        fallback="fliser.png",
+        alt="Et flisediagram",
+        layers=(
+            Layer("lonn", "Median månedslønn",
+                  (("skala2", "40–50 000 kr"), ("skala5", "75 000 kr og over"))),
+            Layer("vekst", "Endring på 10 år",
+                  (("avvik1", "ned over 20 %"), ("avvik4", "opp 5–25 %"))),
+        ),
+        layer_label="Farg flisene etter",
+        caption="Bildetekst",
+        source="Kilde: X",
+    )
+    grunn.update(endringer)
+    return Chart(**grunn)  # type: ignore[arg-type]
+
+
+def test_flisediagram_overlever_json(project: Path) -> None:
+    """Lagene og rollene per merke må bære gjennom fila, ikke bare i minnet."""
+    graf = lag_fliser()
+    tilbake = Article.from_dict(
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).to_dict()
+    )
+    ut = tilbake.charts()[0]
+    assert ut.kind == "treemap"
+    assert [lag.key for lag in ut.layers] == ["lonn", "vekst"]
+    assert ut.layers[0].legend[1] == ("skala5", "75 000 kr og over")
+    assert ut.layer_label == "Farg flisene etter"
+    assert ut.marks[0].tones == ("skala5", "avvik4")
+    assert ut.marks[1].tones == ("skala2", "avvik1")
+
+
+def test_merke_uten_rolle_i_hvert_lag_stopper(katalog: Path) -> None:
+    """En rolle for lite gjør merket usynlig i nøyaktig ett lag — og bare der."""
+    graf = lag_fliser(
+        marks=(Mark(label="Sykepleiere", size=1.0, tones=("skala5",)),)
+    )
+    with pytest.raises(ValueError, match="et annet antall roller"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_flisediagram_uten_flate_stopper(katalog: Path) -> None:
+    """Flatene *er* påstanden. Er de alle null, er det ingen figur."""
+    graf = lag_fliser(
+        marks=(Mark(label="Tom", size=0.0, tones=("skala1", "avvik3")),)
+    )
+    with pytest.raises(ValueError, match="ingen flate har størrelse"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_negativ_flate_stopper(katalog: Path) -> None:
+    graf = lag_fliser(
+        marks=(Mark(label="Umulig", size=-1.0, tones=("skala1", "avvik3")),)
+    )
+    with pytest.raises(ValueError, match="negative størrelser"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_lag_på_en_figurtype_uten_lag_stopper(katalog: Path) -> None:
+    """Ellers står leseren med en velger som ikke gjør noe."""
+    graf = lag_fliser(kind="strip")
+    with pytest.raises(ValueError, match="tegnes uten dem"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_lagvelger_uten_lag_stopper(katalog: Path) -> None:
+    graf = lag_graf(layer_label="Farg etter")
+    with pytest.raises(ValueError, match="lagvelger uten lag"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_to_lag_med_samme_nøkkel_stopper(katalog: Path) -> None:
+    graf = lag_fliser(
+        layers=(Layer("lonn", "Lønn", (("skala1", "lav"),)),
+                Layer("lonn", "Alder", (("skala2", "ung"),))),
+    )
+    with pytest.raises(ValueError, match="samme nøkkel"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_ukjent_rolle_i_et_lag_stopper(katalog: Path) -> None:
+    """Rollene i tegnforklaringen kontrolleres på linje med merkenes egne."""
+    graf = lag_fliser(
+        layers=(Layer("lonn", "Lønn", (("skala9", "finnes ikke"),)),
+                Layer("vekst", "Vekst", (("avvik1", "ned"),))),
+    )
+    with pytest.raises(ValueError, match="skala9"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_hver_fargerolle_finnes_i_både_css_og_js() -> None:
+    """Paletten er delt mellom tre filer. Da må de tre være enige.
+
+    En rolle Python godtar, men som CSS ikke har en verdi for, blir et
+    usynlig merke i nettleseren — og det er nettopp den feilen validate()
+    ikke kan fange, siden den bare kjenner navnene.
+    """
+    from statman.publish import article as art_mod
+
+    css = (Path(art_mod.__file__).parent / "assets" / "graf.css").read_text("utf-8")
+    js = (Path(art_mod.__file__).parent / "assets" / "graf.js").read_text("utf-8")
+    mangler_css = [t for t in art_mod.TONES if f"--{t}:" not in css]
+    mangler_js = [t for t in art_mod.TONES if f"{t}:" not in js]
+    assert not mangler_css, f"fargeroller uten verdi i graf.css: {mangler_css}"
+    assert not mangler_js, f"fargeroller uten oppslag i graf.js: {mangler_js}"
+
+
+def test_de_ordnede_skalaene_er_like_lange() -> None:
+    """Sekvensiell og divergerende skala må ha like mange trinn.
+
+    Analysene deler inn med samme antall grenser uansett hvilken av dem de
+    bruker, og en skala med et trinn for lite ville gitt et stille hopp.
+    """
+    from statman.publish import article as art_mod
+
+    assert len(art_mod.TONES_SKALA) == len(art_mod.TONES_AVVIK)
+    assert art_mod.TONE_MANGLER in art_mod.TONES
+    # Midten av en divergerende skala er den som ikke peker noen vei.
+    assert art_mod.TONES_AVVIK[len(art_mod.TONES_AVVIK) // 2] == "avvik3"

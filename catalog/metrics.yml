@@ -433,3 +433,148 @@ farris_cyanobakterier_aar:
     - Ingen offisiell grenseverdi er lagt inn eller vurdert her — tallene
       vises som de er, ikke klassifisert som "høy"/"lav" risiko.
   breaks: []
+
+# --------------------------------------------------------------------------
+# Arbeidsmarkedet, yrke for yrke. SSB tabell 11658 og 14789, STYRK-08.
+# Alle sju deler tre forbehold som er verdt å lese én gang: utvalget er
+# lønnstakere (ikke selvstendige), grainet er fireside STYRK-08, og
+# hovedgruppe 0 tåler ikke en tidsserie.
+# --------------------------------------------------------------------------
+
+yrke_lonnstakere:
+  label: Lønnstakere i yrket
+  model: mart.arbeidsmarked_yrke
+  column: lonnstakere
+  unit: personer
+  source: SSB tabell 11658, siste kvartal. STYRK-08 fireside nivå.
+  caveats:
+    - "Lønnstakere, ikke sysselsatte. Selvstendig næringsdrivende er ikke
+      med. Det treffer ikke alle yrker likt: bønder, fiskere, frisører,
+      tannleger, advokater og kunstnere er systematisk underrepresentert,
+      mens offentlig ansatte yrker er fullt dekket. Hovedgruppe 6 (bønder,
+      fiskere mv.) står med 27 500 lønnstakere og er dermed en brøkdel av
+      næringen."
+    - "Én person telles i ett yrke — hovedarbeidsforholdet. Den som er
+      sykepleier i 60 prosent og lærer i 40, teller bare som sykepleier."
+    - "Yrkeskoden settes av arbeidsgiver i a-meldingen og kontrolleres ikke
+      mot faktiske arbeidsoppgaver. Kvaliteten varierer mellom yrker, og
+      «Uoppgitt» (kode 0000) er de 7 600 der den mangler helt."
+    - "Kvartalstall. Antall lønnstakere svinger systematisk gjennom året, så
+      to kvartaler kan bare sammenlignes med samme kvartal i et annet år."
+  breaks: []
+
+yrke_vekst_pst:
+  label: Endring i antall lønnstakere over ti år
+  model: mart.arbeidsmarked_yrke
+  column: vekst_pst
+  unit: andel (0.123 = 12,3 %)
+  source: SSB tabell 11658, samme kvartal ti år fra hverandre.
+  caveats:
+    - "Målt, ikke framskrevet. Dette er hva som faktisk skjedde mellom de to
+      kvartalene, ikke en prognose for hva som skjer videre."
+    - "Endring i et yrke er ikke det samme som endring i arbeidsoppgavene.
+      En stilling kan bytte yrkeskode uten at noen bytter jobb, og
+      arbeidsinnholdet kan endres fullstendig uten at koden flytter seg."
+    - "Kolonnen sammenlignbar er false for yrker under 500 lønnstakere i en
+      av endene, og for hele hovedgruppe 0. Rangeringer skal bruke den;
+      tallet finnes for alle yrker, men betyr ikke det samme for alle."
+  breaks:
+    - "Hovedgruppe 0 kan ikke brukes over tid. Forsvaret innførte
+      spesialistordningen (OR/OF) i 2016, og omkodingen alene gir «Befal med
+      sersjant grad» +365 prosent og «Offiserer fra fenrik og høyere grad»
+      -51 prosent. Ingen av delene er en endring i arbeidsmarkedet."
+    - "«Uoppgitt» (0000) falt fra 19 600 til 7 600 fordi yrkesregistreringen
+      ble bedre, ikke fordi et yrke forsvant. De 12 000 er fordelt ut på de
+      andre yrkene, og trekker dermed veksten deres opp med et par tideler
+      hver."
+
+yrke_median_lonn:
+  label: Median månedslønn i yrket
+  model: mart.arbeidsmarked_yrke
+  column: median_lonn
+  unit: kroner per måned
+  source: SSB tabell 11658, siste kvartal. Median over alle lønnstakere i yrket.
+  caveats:
+    - "Månedslønn omregnet til heltidsekvivalent, ikke utbetalt lønn.
+      Deltidsansatte får lønna si skalert opp til det den ville vært i full
+      stilling, så tallet sier hva yrket betaler per time — ikke hva folk i
+      det faktisk har å leve av. Se yrke_avtalt_arbeidstid ved siden av."
+    - "Avtalt månedslønn pluss uregelmessige tillegg og bonus. Overtid er
+      ikke med. Det trekker yrker med mye overtidsbetaling ned mot det
+      avtalte nivået."
+    - "Median, ikke gjennomsnitt. Halvparten tjener mer, halvparten mindre;
+      spredningen inni yrket vises ikke."
+    - "Nominelle kroner i ett kvartal. Ikke deflatert, og ikke sammenlignet
+      over tid noe sted i denne saken — nettopp derfor."
+    - "46 av de 407 yrkene mangler tallet. SSB publiserer ikke median for
+      yrker med for få observasjoner. I åtte kjønnsdelte celler skriver
+      kilden 0; de er gjort til null i mart-laget, fordi en median på null
+      kroner ikke er en lønn."
+  breaks: []
+
+yrke_kvinneandel:
+  label: Kvinneandel i yrket
+  model: mart.arbeidsmarked_yrke
+  column: kvinneandel
+  unit: andel (0.82 = 82 %)
+  source: SSB tabell 11658, siste kvartal.
+  caveats:
+    - "Andel av lønnstakerne i yrket, ikke av årsverkene. Et yrke med mange
+      kvinner i deltid får høyere kvinneandel her enn det ville fått målt i
+      arbeidstimer."
+    - "SSB oppgir to kjønn. Tallet er derfor kvinner delt på summen av to
+      kategorier, ikke på alle mulige svar."
+    - "Sju yrker har ingen lønnstakere igjen og dermed ingen kvinneandel —
+      null, ikke null prosent."
+  breaks: []
+
+yrke_gjennomsnittsalder:
+  label: Gjennomsnittsalder i yrket
+  model: mart.arbeidsmarked_yrke
+  column: gjennomsnittsalder
+  unit: år
+  source: SSB tabell 11658, siste kvartal.
+  caveats:
+    - "Gjennomsnitt, ikke median. Ett yrke kan ha samme snitt av to helt
+      ulike aldersfordelinger — kolonnene under_40, fra_40_til_54 og fra_55
+      viser formen."
+    - "Alder i yrket i dag sier ingenting om når folk går av. Et yrke med
+      høy snittalder kan være et yrke folk kommer til sent, ikke et yrke som
+      er i ferd med å tømmes."
+  breaks: []
+
+yrke_sykefravaer:
+  label: Legemeldt sykefravær i yrket
+  model: mart.arbeidsmarked_yrke
+  column: sykefravaer_pst
+  unit: prosent av avtalte dagsverk
+  source: SSB tabell 14789, siste år (2025). Legemeldt fravær for lønnstakere.
+  caveats:
+    - "Bare legemeldt fravær. Egenmeldt fravær er ikke med, og utgjør
+      omtrent en femtedel av det samlede sykefraværet. Yrker med mye
+      korttidsfravær ser derfor lavere ut enn de er."
+    - "Ikke justert for alders- eller kjønnssammensetning. Sykefravær stiger
+      med alder og er høyere blant kvinner, så et yrke med mange eldre
+      kvinner har høyere fravær av grunner som ikke handler om yrket."
+    - "Årstall, mens alt annet i denne tabellen er siste kvartal. Kildene
+      har ikke samme frekvens, og kolonnen sykefravaer_aar sier hvilket år
+      det gjelder."
+    - "16 av 407 yrker mangler tallet, blant dem alle de militære."
+  breaks: []
+
+yrke_avtalt_arbeidstid:
+  label: Gjennomsnittlig avtalt arbeidstid i yrket
+  model: mart.arbeidsmarked_yrke
+  column: avtalt_arbeidstid
+  unit: timer per uke
+  source: SSB tabell 11658, siste kvartal.
+  caveats:
+    - "Avtalt arbeidstid i hovedarbeidsforholdet, ikke faktisk arbeidet tid.
+      Overtid er ikke med, og en bijobb telles ikke."
+    - "Lav avtalt arbeidstid er ikke det samme som deltid av eget ønske.
+      Tallet skiller ikke mellom et yrke der folk vil jobbe lite og et der
+      det ikke tilbys større stillinger."
+    - "Et yrke som i praksis er et verv eller en bijobb — politikere,
+      idrettsdommere, aktivitetsinstruktører — havner nederst uten at det
+      sier noe om hva en heltidsstilling i yrket innebærer."
+  breaks: []
