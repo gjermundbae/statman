@@ -54,6 +54,14 @@ andre modeller gir en topologisk rekkefølge med sykeldeteksjon; avhengigheter
 til rådata (`raw:`-prefiks) er inndata og kontrolleres før noe kjøres, slik at
 et bygg uten data stopper med en samlet liste i stedet for å feile halvveis.
 
+Én av dem er annerledes enn de andre: `min_rows`. De øvrige teller *rader som
+bryter*, og en tom tabell har ingen — en modell som returnerer null rader
+består derfor alle sjekker den har, og lander like stille som en riktig. Det er
+ikke teoretisk; det skjedde under arbeidet med konsumprisdeflatoren, der et
+kvartalsuttrykk ga etiketter som ikke koblet mot noe. `min_rows:1` er den
+eneste formen som kan feile på ingenting, og terskelen er 1 med vilje: en
+modell skal påstå at den lager noe, ikke hvor mye.
+
 Sjekker er ikke dokumentasjon, de er en port. De kjøres mot resultatet før det
 får sitt endelige navn, så en feilet sjekk etterlater ingenting og lar en
 tidligere gyldig tabell stå urørt. To til fire sjekker per modell er nok, og en
@@ -222,7 +230,14 @@ Reservert, ikke glemt. Hver av dem bygges når en konkret analyse krever det:
   hentet fra kilden framfor skrevet av for hånd er det billigste stedet å ta
   den lærdommen.
 - **Tids- og næringskodedimensjoner.** Samme regel.
-- **Deflatering som delt funksjon.** Etter andre gang den er skrevet for hånd.
+- ~~**Deflatering som delt funksjon.**~~ *Bygget andre gang den trengtes, men
+  ikke som funksjon.* Terskelen var riktig; formen var feil gjettet. Selve
+  regnestykket er én multiplikasjon — `verdi × referanseindeks ÷ periodeindeks`
+  — og en funksjon rundt den skjuler mer enn den sparer. Det som faktisk ville
+  deles var *tabellen*: `mart.konsumpris_kvartal`, med de to valgene tatt ett
+  sted (kvartalsindeksen er snittet av tre måneder; ufullstendige kvartaler
+  faller ut). Deflatering er derfor en join, ikke et kall. I et system der
+  filsystemet er databasen, er en delt tabell den naturlige delte tingen.
 - **Inkrementell bygging.** Når full rebuild ikke lenger går på sekunder.
 - **Avviksmonitor.** Krever ingest på skjema, altså automatisering først.
 - **Scheduling.** Når manuell kjøring blir irriterende, ikke før.
@@ -236,9 +251,11 @@ Reservert, ikke glemt. Hver av dem bygges når en konkret analyse krever det:
   en figur skulle se dårlig ut på skjerm. Det som faktisk utløste det var noe
   annet: en leser kunne ikke finne sin egen kommune blant 323 prikker. SVG ble
   midlet, ikke målet — se «Figurene» over.
-- **Linjediagram i `Chart`.** Punkt, stripe og søyle finnes. Linja låser opp
-  rente_bolig og begge preben-sakene på én gang, og bygges når den første av
-  dem skal røres.
+- ~~**Linjediagram i `Chart`.**~~ *Bygget.* Det som utløste den var ikke
+  rente_bolig, men reallønn: ti indekserte serier som skal leses mot hverandre
+  har ingen annen form. Merket bærer nå `points` og `point_labels`, altså en
+  serie i stedet for ett punkt, og rente_bolig og preben-sakene kan bruke den
+  uten flere endringer i figurlaget.
 - **Figurtypografi på små skjermer.** En fast `viewBox` skalerer teksten ned
   med bredden, så aksemerkene blir små under ~500 piksler. Løsningen er kjent —
   eget utsnitt og færre merker under et brytepunkt — og gjøres når noen leser

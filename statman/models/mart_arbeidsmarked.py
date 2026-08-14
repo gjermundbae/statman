@@ -52,6 +52,14 @@ MINSTE_YRKE: Final[int] = 500
 # Hovedgruppa som holdes utenfor rangeringen: militære yrker og uoppgitt.
 UTENFOR_HOVEDGRUPPE: Final[str] = "0"
 
+# Kvartalsskiftet SSB selv merker tabellen med: «Fra 4. kvartal 2024 til 1.
+# kvartal 2025 har kvalitetsforbedringer i innrapporteringen medført større
+# endringer i tabellene med yrke. […] Store endringer mellom disse periodene
+# bør tolkes med forsiktighet.» Vi kan ikke rette det, men vi kan måle hvor
+# mye av en tiårsendring som skjedde akkurat der, og la sakspakken si det.
+BRUDD_FRA: Final[str] = "2024K4"
+BRUDD_TIL: Final[str] = "2025K1"
+
 
 @model(
     name="mart.arbeidsmarked_yrke",
@@ -62,9 +70,11 @@ UTENFOR_HOVEDGRUPPE: Final[str] = "0"
         "clean.yrke_kjonn",
         "clean.yrke_alder",
         "clean.yrke_sykefravaer",
+        "mart.arbeidsmarked_lonn_kvartal",
     ],
     checks=[
         "unique:yrke",
+        "min_rows:1",
         "not_null:yrke_navn",
         "not_null:hovedgruppe_navn",
         "length(yrke) = 4",
@@ -83,6 +93,11 @@ UTENFOR_HOVEDGRUPPE: Final[str] = "0"
         # bestanden som totalen. Er de ikke det, har vi koblet feil kvartal.
         "kvinner + menn = lonnstakere",
         "under_40 + fra_40_til_54 + fra_55 = lonnstakere",
+        # Prisene steg over perioden, så reallønnsveksten må være lavere enn
+        # den nominelle i hvert eneste yrke. Er den ikke det, er deflatoren
+        # koblet på feil kvartal — den feilen gir ellers tall som ser helt
+        # rimelige ut.
+        "reallonn_vekst_pst is null or reallonn_vekst_pst < lonn_vekst_pst",
     ],
     doc="Ett rad per fireside STYRK-08-yrke: bestand, lønn, kjønn, alder, sykefravær og tiårsvekst.",
 )
@@ -137,6 +152,31 @@ def mart_arbeidsmarked_yrke(ctx: Context) -> Any:
             select yrke, aar as sykefravaer_aar, sykefravaer_pst
             from clean_yrke_sykefravaer
             qualify row_number() over (partition by yrke order by aar desc) = 1
+        ),
+        -- Lønna i hver ende av perioden, nominelt og i faste kroner. Samme
+        -- kvartaler som bestanden måles mellom, så de to endringene gjelder
+        -- nøyaktig samme tidsrom.
+        lonnsutvikling as (
+            select
+                l.yrke,
+                max(case when l.kvartal = g.kvartal_slutt then l.median_lonn_nominell end) as lonn_slutt,
+                max(case when l.kvartal = g.kvartal_start then l.median_lonn_nominell end) as lonn_start,
+                max(case when l.kvartal = g.kvartal_slutt then l.median_lonn_realt end)    as reallonn_slutt,
+                max(case when l.kvartal = g.kvartal_start then l.median_lonn_realt end)    as reallonn_start
+            from mart_arbeidsmarked_lonn_kvartal l, grenser g
+            where l.kvartal in (g.kvartal_start, g.kvartal_slutt)
+            group by l.yrke
+        ),
+        -- Hvor mye av bestandsendringen som skjedde i det ene kvartalsskiftet
+        -- SSB selv ber om at tolkes med forsiktighet. Se BRUDD_FRA/BRUDD_TIL.
+        bruddkvartal as (
+            select
+                yrke,
+                max(case when kvartal = '{BRUDD_TIL}'  then lonnstakere end)
+                    - max(case when kvartal = '{BRUDD_FRA}' then lonnstakere end) as endring_bruddkvartal
+            from clean_yrke_kvartal
+            where kvartal in ('{BRUDD_FRA}', '{BRUDD_TIL}')
+            group by yrke
         )
         select
             y.kode                                              as yrke,
@@ -154,6 +194,21 @@ def mart_arbeidsmarked_yrke(ctx: Context) -> Any:
             case when b.lonnstakere_start > 0
                  then b.lonnstakere / cast(b.lonnstakere_start as double) - 1
             end                                                 as vekst_pst,
+
+            -- Reallønn: samme kvartaler som bestanden, deflatert med KPI.
+            -- Null der lønna mangler i én av endene — en reallønnsendring
+            -- krever to målinger, og halvparten av et forhold er ingenting.
+            lu.lonn_start                                       as median_lonn_start,
+            lu.reallonn_start                                   as reallonn_start,
+            lu.reallonn_slutt                                   as reallonn_slutt,
+            case when lu.lonn_start > 0
+                 then lu.lonn_slutt / lu.lonn_start - 1
+            end                                                 as lonn_vekst_pst,
+            case when lu.reallonn_start > 0
+                 then lu.reallonn_slutt / lu.reallonn_start - 1
+            end                                                 as reallonn_vekst_pst,
+
+            cast(bk.endring_bruddkvartal as bigint)             as endring_bruddkvartal,
 
             -- Se moduldocstringen: kildens 0 betyr «ingen å regne på».
             nullif(s.median_lonn, 0)                            as median_lonn,
@@ -189,11 +244,161 @@ def mart_arbeidsmarked_yrke(ctx: Context) -> Any:
         join bestand     b  on b.yrke = y.kode
         join clean_styrk h  on h.kode = substr(y.kode, 1, 1)
         join clean_styrk yg on yg.kode = substr(y.kode, 1, 2)
-        left join kjonn       k on k.yrke = y.kode
-        left join alder       a on a.yrke = y.kode
-        left join sykefravaer f on f.yrke = y.kode
+        left join kjonn          k  on k.yrke = y.kode
+        left join alder          a  on a.yrke = y.kode
+        left join sykefravaer    f  on f.yrke = y.kode
+        left join lonnsutvikling lu on lu.yrke = y.kode
+        left join bruddkvartal   bk on bk.yrke = y.kode
         where y.nivaa = 4
         order by b.lonnstakere desc, y.kode
+    """)
+
+
+@model(
+    name="mart.arbeidsmarked_lonn_kvartal",
+    deps=["clean.styrk", "clean.yrke_lonn_kvartal", "mart.konsumpris_kvartal"],
+    checks=[
+        "unique:yrke,kvartal",
+        "min_rows:1",
+        "not_null:yrke_navn",
+        "length(yrke) = 4",
+        "median_lonn_nominell > 0",
+        "median_lonn_realt > 0",
+        # Referansekvartalet er det eneste der de to er like. Er de like
+        # andre steder også, er deflatoren ikke koblet på.
+        "kvartal <> kvartal_referanse or abs(median_lonn_realt - median_lonn_nominell) < 0.005",
+    ],
+    doc="Median månedslønn per fireside yrke og kvartal, nominelt og i faste kroner.",
+)
+def mart_arbeidsmarked_lonn_kvartal(ctx: Context) -> Any:
+    """Lønnsserien deflatert med KPI.
+
+    Nullene fra kilden faller ut her og ikke i clean: en median på null
+    kroner er ikke en lønn, og deflatert blir den fortsatt null. Å la den
+    stå ville gjort en tom celle til et datapunkt på bunnen av enhver
+    reallønnsgraf.
+
+    Kvartaler uten fullstendig KPI faller ut med koblingen — det er en
+    innerjoin med vilje. Å deflatere med en ufullstendig indeks ville gitt
+    et tall som ser ut som en reallønnsendring uten å være det.
+    """
+    return ctx.sql("""
+        select
+            l.yrke                                      as yrke,
+            l.yrke_navn                                 as yrke_navn,
+            l.kvartal                                   as kvartal,
+            l.median_lonn                               as median_lonn_nominell,
+            k.kpi                                       as kpi,
+            l.median_lonn * k.deflator_siste            as median_lonn_realt,
+            k.kvartal_referanse                         as kvartal_referanse
+        from clean_yrke_lonn_kvartal l
+        join clean_styrk y on y.kode = l.yrke and y.nivaa = 4
+        join mart_konsumpris_kvartal k on k.kvartal = l.kvartal
+        where l.median_lonn > 0
+        order by l.yrke, l.kvartal
+    """)
+
+
+@model(
+    name="mart.arbeidsmarked_reallonn_gruppe",
+    deps=["clean.styrk", "clean.yrke_kvartal", "mart.arbeidsmarked_lonn_kvartal"],
+    checks=[
+        "unique:hovedgruppe,kvartal",
+        "min_rows:1",
+        "not_null:hovedgruppe_navn",
+        "reallonn_indeks > 0",
+        "yrker > 0",
+    ],
+    doc="Reallønnsindeks per hovedgruppe og kvartal, med faste vekter fra startkvartalet.",
+)
+def mart_arbeidsmarked_reallonn_gruppe(ctx: Context) -> Any:
+    """Reallønn per hovedgruppe, som indeks med **faste vekter**.
+
+    To valg bærer denne tabellen, og begge er der for å svare på ett
+    spørsmål: *endret lønna seg, eller endret det seg hvem som jobber her?*
+
+    **Vektene er låst til startkvartalet.** Et gjennomsnitt med løpende
+    vekter blander de to sammen: en gruppe der lavtlønte yrker vokser fort
+    får fallende «snittlønn» selv om hvert eneste yrke i den fikk påslag.
+    Med faste vekter måler indeksen bare det første.
+
+    **Utvalget er yrker med publisert medianlønn i alle kvartaler.** Et yrke
+    som dukker opp midtveis ville ellers flyttet indeksen den dagen det kom,
+    med et hopp som ser ut som en lønnsendring. Prisen er at de minste
+    yrkene faller ut — de er de samme som mangler median.
+
+    Gruppa ``alle`` er den samme regningen over hele utvalget, ikke snittet
+    av de ni gruppene. De to er ikke like når gruppene er ulike store.
+    """
+    return ctx.sql("""
+        with komplett as (
+            -- Yrker med lønn i hvert eneste kvartal serien dekker.
+            select yrke
+            from mart_arbeidsmarked_lonn_kvartal
+            group by yrke
+            having count(*) = (select count(distinct kvartal) from mart_arbeidsmarked_lonn_kvartal)
+        ),
+        start as (
+            -- Samme startkvartal som resten av saken: samme kvartal ti år
+            -- før det siste. Basisen må ligge i samme sesong som den siste
+            -- målingen, ellers starter indeksen i en bølgedal og alt ser ut
+            -- til å ha steget. Lønn svinger ~2 indekspoeng gjennom året.
+            select
+                (cast(substr(max(kvartal), 1, 4) as integer) - """ + str(PERIODE_AAR) + """)
+                    || substr(max(kvartal), 5, 2) as kvartal_start
+            from mart_arbeidsmarked_lonn_kvartal
+        ),
+        vekt as (
+            -- Bestanden i startkvartalet, låst. Yrker uten lønnstakere da
+            -- har ingen vekt å bidra med.
+            select k.yrke, k.lonnstakere as vekt
+            from clean_yrke_kvartal k, start s
+            where k.kvartal = s.kvartal_start
+              and k.yrke in (select yrke from komplett)
+              and k.lonnstakere > 0
+        ),
+        merket as (
+            select
+                l.kvartal,
+                l.median_lonn_realt,
+                v.vekt,
+                substr(l.yrke, 1, 1) as hovedgruppe
+            from mart_arbeidsmarked_lonn_kvartal l
+            join vekt v on v.yrke = l.yrke
+        ),
+        -- Hver gruppe, og hele utvalget under nøkkelen 'alle'.
+        oppdelt as (
+            select hovedgruppe, kvartal, median_lonn_realt, vekt from merket
+            union all
+            select 'alle' as hovedgruppe, kvartal, median_lonn_realt, vekt from merket
+        ),
+        snitt as (
+            select
+                hovedgruppe,
+                kvartal,
+                sum(median_lonn_realt * vekt) / sum(vekt) as reallonn,
+                count(*)                                 as yrker,
+                sum(vekt)                                as vekt
+            from oppdelt
+            group by 1, 2
+        ),
+        basis as (
+            select s.hovedgruppe, s.reallonn as reallonn_basis
+            from snitt s, start st
+            where s.kvartal = st.kvartal_start
+        )
+        select
+            s.hovedgruppe                                   as hovedgruppe,
+            coalesce(h.navn, 'Alle yrker')                  as hovedgruppe_navn,
+            s.kvartal                                       as kvartal,
+            s.reallonn                                      as reallonn,
+            s.reallonn / b.reallonn_basis * 100             as reallonn_indeks,
+            cast(s.yrker as integer)                        as yrker,
+            cast(s.vekt as bigint)                          as lonnstakere_vekt
+        from snitt s
+        join basis b on b.hovedgruppe = s.hovedgruppe
+        left join clean_styrk h on h.kode = s.hovedgruppe and h.nivaa = 1
+        order by s.hovedgruppe, s.kvartal
     """)
 
 
@@ -202,6 +407,7 @@ def mart_arbeidsmarked_yrke(ctx: Context) -> Any:
     deps=["clean.styrk", "clean.yrke_kvartal"],
     checks=[
         "unique:hovedgruppe,kvartal",
+        "min_rows:1",
         "not_null:hovedgruppe_navn",
         "lonnstakere > 0",
         "length(hovedgruppe) = 1",

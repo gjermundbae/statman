@@ -519,3 +519,66 @@ def test_de_ordnede_skalaene_er_like_lange() -> None:
     assert art_mod.TONE_MANGLER in art_mod.TONES
     # Midten av en divergerende skala er den som ikke peker noen vei.
     assert art_mod.TONES_AVVIK[len(art_mod.TONES_AVVIK) // 2] == "avvik3"
+
+
+# --------------------------------------------------------------------------
+# Linjediagram
+# --------------------------------------------------------------------------
+def lag_linjer(**endringer) -> Chart:
+    grunn = dict(
+        kind="line",
+        marks=(
+            Mark(label="Alle yrker", tone="kat1", pin=True,
+                 points=((0, 100.0), (1, 104.5), (2, 100.3), (3, 105.3)),
+                 point_labels=("2016K2 · 100,0", "2020K2 · 104,5",
+                               "2023K2 · 100,3", "2026K2 · 105,3"),
+                 values=(Readout("Reallønn", "+5,3 %", "vekst"),)),
+            Mark(label="Ledere", tone="noytral",
+                 points=((0, 100.0), (1, 103.5), (2, 99.9), (3, 105.2))),
+        ),
+        fallback="reallonn.png",
+        alt="Linjediagram med reallønnsindeks",
+        x=Axis("", 0, 3, (0, 1, 2, 3), ("2016", "2020", "2023", "2026")),
+        y=Axis("Indeks", 98, 108, (100,), ("100",)),
+        guides=(Guide("y", 100.0, ("samme kjøpekraft",)),),
+        caption="Bildetekst",
+        source="Kilde: X",
+    )
+    grunn.update(endringer)
+    return Chart(**grunn)  # type: ignore[arg-type]
+
+
+def test_linjediagram_overlever_json(project: Path) -> None:
+    """Punktene og punktteksten må bære gjennom fila, ikke bare i minnet."""
+    tilbake = Article.from_dict(
+        lag_artikkel(sections=(Section("Funn", (lag_linjer(),)),)).to_dict()
+    )
+    ut = tilbake.charts()[0]
+    assert ut.kind == "line"
+    assert ut.marks[0].points == ((0.0, 100.0), (1.0, 104.5), (2.0, 100.3), (3.0, 105.3))
+    assert ut.marks[0].point_labels[2] == "2023K2 · 100,3"
+    # En linje uten punkttekst er lovlig, og skal komme tom tilbake.
+    assert ut.marks[1].point_labels == ()
+
+
+def test_linje_med_ett_punkt_stopper(katalog: Path) -> None:
+    """En linje gjennom ett punkt er et punkt, og viser ingen retning."""
+    graf = lag_linjer(marks=(Mark(label="Stubb", points=((0, 1.0),)),))
+    with pytest.raises(ValueError, match="færre enn to punkter"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_linje_uten_akser_stopper(katalog: Path) -> None:
+    graf = lag_linjer(x=None, y=None)
+    with pytest.raises(ValueError, match="linjediagram og trenger begge akser"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_punkttekst_som_ikke_følger_punktene_stopper(katalog: Path) -> None:
+    """Ellers viser boblen tallet fra nabopunktet, uten å si fra."""
+    graf = lag_linjer(
+        marks=(Mark(label="Skjev", points=((0, 1.0), (1, 2.0)),
+                    point_labels=("bare én",)),)
+    )
+    with pytest.raises(ValueError, match="punktteksten ikke følger punktene"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()

@@ -30,6 +30,7 @@ from statman import jsonstat
 from statman.registry import Context, model
 
 RAW_KVARTAL: Final[str] = "ssb/11658_kvartal"
+RAW_LONN_KVARTAL: Final[str] = "ssb/11658_lonn_kvartal"
 RAW_SISTE: Final[str] = "ssb/11658_siste"
 RAW_KJONN: Final[str] = "ssb/11658_kjonn"
 RAW_ALDER: Final[str] = "ssb/11658_alder"
@@ -71,6 +72,38 @@ def clean_yrke_kvartal(ctx: Context) -> Any:
         from _kvartal
         where value is not null
           and lower(contentscode) = 'lonsstakere'
+        order by yrke, kvartal
+    """)
+
+
+@model(
+    name="clean.yrke_lonn_kvartal",
+    deps=[f"raw:{RAW_LONN_KVARTAL}"],
+    checks=[
+        "unique:yrke,kvartal",
+        "not_null:yrke_navn",
+        "median_lonn >= 0",
+        "regexp_matches(kvartal, '^[0-9]{4}K[1-4]$')",
+    ],
+    doc="SSB 11658, median månedslønn per yrke og kvartal. Hele serien.",
+)
+def clean_yrke_lonn_kvartal(ctx: Context) -> Any:
+    """Medianlønna kvartal for kvartal.
+
+    Nullene beholdes her, som ellers i denne fila: en median på null kroner
+    er ikke en lønn, men det er kildens tall, og å tolke det er mart-lagets
+    jobb. Se ``clean.yrke_kjonn`` for den samme avveiningen.
+    """
+    ctx.register("_lonn", jsonstat.to_frame(ctx.raw_latest(RAW_LONN_KVARTAL)))
+    return ctx.sql("""
+        select
+            yrke                     as yrke,
+            yrke_label               as yrke_navn,
+            tid                      as kvartal,
+            cast(value as double)    as median_lonn
+        from _lonn
+        where value is not null
+          and lower(contentscode) = 'medianmndlonn'
         order by yrke, kvartal
     """)
 

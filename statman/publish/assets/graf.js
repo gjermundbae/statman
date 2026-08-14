@@ -59,7 +59,8 @@
         tone: m.tone || "noytral",
         values: m.values || [], segments: m.segments || [],
         note: m.note || "", pin: !!m.pin,
-        tones: m.tones || []
+        tones: m.tones || [],
+        points: m.points || [], point_labels: m.point_labels || []
       };
     });
     spek.guides = (spek.guides || []).map(function (g) {
@@ -542,6 +543,119 @@
     return s;
   }
 
+  /* ================================================================= LINJER */
+  // Hvert merke er én serie, ikke ett punkt. Linja tegnes gjennom punktene
+  // slik de kom; ingen utjevning, ingen interpolering av hull. Et hull i
+  // dataene skal se ut som et hull, ikke som en rett strekning.
+  function tegnLinjer(spek, vert, boble, g) {
+    var B = 860, H = 520, plott = { v: 62, h: 782, t: 18, b: 462 };
+    var s = el("svg", {
+      viewBox: "0 0 " + B + " " + H, role: "img", "aria-label": spek.alt
+    });
+    var lag = el("g");
+    s.appendChild(lag);
+
+    var x = skala(spek.x.lo, spek.x.hi, plott.v, plott.h);
+    var y = skala(spek.y.lo, spek.y.hi, plott.b, plott.t);
+
+    tegnAkser(lag, spek, x, y, plott);
+    tegnGuider(lag, spek, x, y, plott);
+
+    var linjer = el("g");
+    lag.appendChild(linjer);
+    spek.marks.forEach(function (m) {
+      m._pkt = m.points.map(function (p) { return [x(p[0]), y(p[1])] });
+      m._el = el("polyline", {
+        class: "linje",
+        points: m._pkt.map(function (p) { return p[0] + "," + p[1] }).join(" "),
+        fill: "none", stroke: farge(m.tone),
+        "stroke-width": m.pin ? 2.6 : 1.5,
+        "stroke-linejoin": "round", "stroke-linecap": "round",
+        "stroke-opacity": m.pin ? 1 : 0.55
+      });
+      linjer.appendChild(m._el);
+    });
+
+    // Navn ved siste punkt, bare på de linjene analysen ba om. En
+    // tegnforklaring ved siden av tvinger leseren til å matche farger;
+    // navnet der linja slutter gjør ikke det.
+    var faste = [];
+    spek.marks.filter(function (m) { return m.pin && m._pkt.length; }).forEach(function (m) {
+      var sist = m._pkt[m._pkt.length - 1];
+      var t = txt(el("text", {
+        class: "etikett", x: sist[0] + 8, y: sist[1] + 4
+      }), m.label);
+      lag.appendChild(t);
+      faste.push([m, t]);
+    });
+
+    var ring = el("circle", { class: "valgt-ring", r: 4, cx: 0, cy: 0, opacity: 0 });
+    lag.appendChild(ring);
+
+    var flate = el("rect", {
+      x: plott.v, y: plott.t, width: plott.h - plott.v, height: plott.b - plott.t,
+      fill: "transparent"
+    });
+    lag.appendChild(flate);
+
+    function naermest(ev) {
+      var ctm = s.getScreenCTM();
+      if (!ctm) return null;
+      var p = s.createSVGPoint();
+      p.x = ev.clientX; p.y = ev.clientY;
+      p = p.matrixTransform(ctm.inverse());
+      var best = null, bd = 1e9;
+      spek.marks.forEach(function (m) {
+        if (g.filter && m.group !== g.filter) return;
+        m._pkt.forEach(function (q, i) {
+          var d = Math.hypot(q[0] - p.x, q[1] - p.y);
+          if (d < bd) { bd = d; best = { mark: m, i: i, x: q[0], y: q[1] }; }
+        });
+      });
+      return bd < 40 ? best : null;
+    }
+
+    flate.addEventListener("pointermove", function (ev) {
+      var treff = naermest(ev);
+      if (!treff) { ring.setAttribute("opacity", 0); return visBoble(boble, vert, null); }
+      ring.setAttribute("cx", treff.x);
+      ring.setAttribute("cy", treff.y);
+      ring.setAttribute("opacity", 1);
+      var r = s.getBoundingClientRect(), k = r.width / B;
+      // Boblen får punktteksten som undertittel, og merkets faste avlesninger
+      // under. Begge deler kom ferdig formatert fra analysen.
+      visBoble(boble, vert, {
+        label: treff.mark.label,
+        group: treff.mark.point_labels[treff.i] || "",
+        values: treff.mark.values
+      }, r.left + treff.x * k, r.top + treff.y * k);
+    });
+    flate.addEventListener("pointerleave", function () {
+      ring.setAttribute("opacity", 0);
+      visBoble(boble, vert, null);
+    });
+    flate.addEventListener("click", function (ev) {
+      var treff = naermest(ev);
+      velg(g, treff && treff.mark.label !== g.valgt ? treff.mark.label : null);
+    });
+
+    g.lyttere.push(function (valgt, filter) {
+      spek.marks.forEach(function (m) {
+        var pa = m.label === valgt;
+        m._el.classList.toggle("valgt", pa);
+        m._el.classList.toggle("i-gruppe", !!filter && m.group === filter);
+        // Den valgte linja løftes fram med tykkelse, ikke bare med farge.
+        m._el.setAttribute("stroke-width", pa ? 3.2 : (m.pin ? 2.6 : 1.5));
+        m._el.setAttribute("stroke-opacity", pa ? 1 : (m.pin ? 1 : 0.55));
+      });
+      s.classList.toggle("dempet", !!valgt || !!filter);
+      faste.forEach(function (par) {
+        par[1].setAttribute("opacity", !valgt || par[0].label === valgt ? 1 : 0.25);
+      });
+    });
+    return s;
+  }
+
   /* ============================================================ FLISEDIAGRAM */
   // Squarified treemap etter Bruls, Huizing og van Wijk (2000): flatene
   // legges radvis langs den korteste kanten, og en ny flate tas med i raden
@@ -981,6 +1095,7 @@
       else if (spek.kind === "strip") s = tegnStripe(spek, flate, boble, g);
       else if (spek.kind === "bars") s = tegnSoyler(spek, flate, boble, g);
       else if (spek.kind === "treemap") s = tegnFliser(spek, flate, boble, g);
+      else if (spek.kind === "line") s = tegnLinjer(spek, flate, boble, g);
     } catch (e) {
       s = null;
     }

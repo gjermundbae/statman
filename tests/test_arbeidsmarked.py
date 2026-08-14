@@ -80,6 +80,29 @@ ALDER: dict[str, tuple[int, int, int]] = {
     "0000": (100, 60, 40),
 }
 
+# Medianlønn i hver ende. 1111 får reallønnsvekst (nominelt +60 % mot 33 %
+# prisvekst), 5111 får reallønnsfall (+25 %). 5112 er kildens 0.
+LONN_KVARTAL: dict[str, list[float]] = {
+    "0-9": [45_000, 60_000],
+    "1111": [50_000, 80_000],
+    "5111": [40_000, 50_000],
+    "5112": [0, 0],
+    "0000": [43_000, 55_000],
+}
+
+# KPI: 75 gjennom hele 2016, 100 gjennom hele 2026, lineært imellom. Da er
+# prisveksten nøyaktig 33,33 prosent, og deflatoren for 2016K2 er 4/3.
+#
+# Serien stopper i august, som den ekte gjør: KPI publiseres månedlig og
+# ligger foran kvartalsstatistikken. Det gir ett ufullstendig kvartal
+# (2026K3 med to måneder) som skal falle ut, og et referansekvartal som er
+# det siste fullstendige — 2026K2.
+KPI_START_AAR: int = 2016
+KPI_SLUTT_AAR: int = 2026
+KPI_SISTE_MAANED: int = 8
+KPI_START: float = 75.0
+KPI_SLUTT: float = 100.0
+
 # To år, så vi kan sjekke at mart tar det siste. 0000 mangler helt.
 SYKEFRAVAER: dict[str, dict[str, float]] = {
     "0-9": {"2024": 5.0, "2025": 5.4},
@@ -211,9 +234,51 @@ def _sykefravaer_doc() -> dict[str, Any]:
     )
 
 
+def _kpi_maaneder() -> list[str]:
+    return [
+        f"{aar}M{mnd:02d}"
+        for aar in range(KPI_START_AAR, KPI_SLUTT_AAR + 1)
+        for mnd in range(1, 13)
+        if not (aar == KPI_SLUTT_AAR and mnd > KPI_SISTE_MAANED)
+    ]
+
+
+def _lonn_kvartal_doc() -> dict[str, Any]:
+    verdier = [LONN_KVARTAL[y][t] for y in YRKER for t in range(len(KVARTAL))]
+    return _doc(
+        {
+            "Kjonn": _dim(["0"], {"0": "Begge kjønn"}),
+            "Alder": _dim(["999D"], {"999D": "Alle aldre"}),
+            "Yrke": _dim(YRKER, YRKESNAVN),
+            "ContentsCode": _dim(["MedianMndLonn"]),
+            "Tid": _dim(KVARTAL),
+        },
+        verdier,
+    )
+
+
+def _kpi_doc() -> dict[str, Any]:
+    maaneder = _kpi_maaneder()
+    spenn = KPI_SLUTT_AAR - KPI_START_AAR
+    verdier = [
+        KPI_START + (KPI_SLUTT - KPI_START) * (int(m[:4]) - KPI_START_AAR) / spenn
+        for m in maaneder
+    ]
+    return _doc(
+        {
+            "VareTjenesteGrp": _dim(["00"], {"00": "I alt"}),
+            "ContentsCode": _dim(["KpiIndMnd"]),
+            "Tid": _dim(maaneder),
+        },
+        verdier,
+    )
+
+
 def _skriv_raa() -> None:
     for dataset, doc in (
         ("11658_kvartal", _kvartal_doc()),
+        ("11658_lonn_kvartal", _lonn_kvartal_doc()),
+        ("14700_kpi", _kpi_doc()),
         ("11658_siste", _siste_doc()),
         ("11658_kjonn", _kjonn_doc()),
         ("11658_alder", _alder_doc()),
@@ -232,7 +297,11 @@ def _skriv_raa() -> None:
 @pytest.fixture
 def built(project) -> dict[str, registry.BuildResult]:
     _skriv_raa()
-    targets = ["mart.arbeidsmarked_yrke", "mart.arbeidsmarked_hovedgruppe_kvartal"]
+    targets = [
+        "mart.arbeidsmarked_yrke",
+        "mart.arbeidsmarked_hovedgruppe_kvartal",
+        "mart.arbeidsmarked_reallonn_gruppe",
+    ]
     return {r.name: r for r in registry.build(targets)}
 
 
@@ -252,8 +321,13 @@ def test_build_covers_the_whole_chain(built: dict[str, registry.BuildResult]) ->
         "clean.yrke_kjonn",
         "clean.yrke_alder",
         "clean.yrke_sykefravaer",
+        "clean.yrke_lonn_kvartal",
+        "clean.konsumprisindeks",
+        "mart.konsumpris_kvartal",
+        "mart.arbeidsmarked_lonn_kvartal",
         "mart.arbeidsmarked_yrke",
         "mart.arbeidsmarked_hovedgruppe_kvartal",
+        "mart.arbeidsmarked_reallonn_gruppe",
     }
 
 
@@ -406,3 +480,136 @@ def test_group_series_is_a_rollup_of_the_occupations(
         assert total == BESTAND["0-9"][i]
     salg = df.filter((pl.col("hovedgruppe") == "5") & (pl.col("kvartal") == "2026K2"))
     assert salg.row(0, named=True)["lonnstakere"] == 9_000 + 800
+
+
+# --------------------------------------------------------------------------
+# mart — deflatering og reallønn
+# --------------------------------------------------------------------------
+def test_quarterly_kpi_is_the_mean_of_three_months(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    kpi = io.load("mart.konsumpris_kvartal")
+    assert kpi.filter(pl.col("maaneder") != 3).height == 0
+    start = kpi.filter(pl.col("kvartal") == "2016K2").row(0, named=True)
+    assert start["kpi"] == pytest.approx(KPI_START)
+    assert start["kvartal_referanse"] == "2026K2"
+    # Deflatoren for referansekvartalet er per definisjon 1.
+    siste = kpi.filter(pl.col("kvartal") == "2026K2").row(0, named=True)
+    assert siste["deflator_siste"] == pytest.approx(1.0)
+    assert start["deflator_siste"] == pytest.approx(KPI_SLUTT / KPI_START)
+
+
+def test_incomplete_quarters_are_dropped(built: dict[str, registry.BuildResult]) -> None:
+    """Et kvartal med én publisert måned ville gitt den måneden som «snitt».
+
+    KPI ligger foran lønnsstatistikken, så det siste kvartalet er ofte
+    ufullstendig. Deflaterer man med det, ser prisnivået feil ut og
+    differansen leses som reallønn.
+    """
+    kpi = io.load("mart.konsumpris_kvartal")
+    kvartaler = kpi["kvartal"].to_list()
+    # 2026K3 har bare juli og august i kilden, og skal ikke finnes her.
+    assert "2026K2" in kvartaler
+    assert "2026K3" not in kvartaler
+    assert kpi.height == io.load("clean.konsumprisindeks").height // 3
+
+
+def test_real_wage_is_nominal_deflated_to_the_reference_quarter(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    serie = io.load("mart.arbeidsmarked_lonn_kvartal")
+    start = serie.filter((pl.col("yrke") == "1111") & (pl.col("kvartal") == "2016K2")).row(
+        0, named=True
+    )
+    assert start["median_lonn_nominell"] == pytest.approx(LONN_KVARTAL["1111"][0])
+    assert start["median_lonn_realt"] == pytest.approx(
+        LONN_KVARTAL["1111"][0] * KPI_SLUTT / KPI_START
+    )
+    # I referansekvartalet er de to like.
+    slutt = serie.filter((pl.col("yrke") == "1111") & (pl.col("kvartal") == "2026K2")).row(
+        0, named=True
+    )
+    assert slutt["median_lonn_realt"] == pytest.approx(slutt["median_lonn_nominell"])
+
+
+def test_a_zero_median_never_reaches_the_real_wage_series(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    """Deflatert er null fortsatt null, og ville blitt et punkt i bunnen."""
+    serie = io.load("mart.arbeidsmarked_lonn_kvartal")
+    assert serie.filter(pl.col("yrke") == "5112").height == 0
+
+
+def test_real_growth_is_below_nominal_when_prices_rose(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    rad = _yrke(built, "1111")
+    # +60 % nominelt mot 33,3 % prisvekst.
+    assert rad["lonn_vekst_pst"] == pytest.approx(0.6)
+    assert rad["reallonn_vekst_pst"] == pytest.approx(1.6 / (KPI_SLUTT / KPI_START) - 1)
+    assert rad["reallonn_vekst_pst"] < rad["lonn_vekst_pst"]
+
+
+def test_nominal_growth_below_inflation_is_a_real_cut(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    """+25 prosent lønn mot 33 prosent prisvekst er et kutt, ikke et påslag."""
+    rad = _yrke(built, "5111")
+    assert rad["lonn_vekst_pst"] == pytest.approx(0.25)
+    assert rad["reallonn_vekst_pst"] < 0
+
+
+def test_the_break_quarter_is_measured_not_asserted(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    """Fixturen har ingen bruddkvartaler, så kolonnen skal være null.
+
+    Poenget med kolonnen er at den er *målt*: finnes ikke kvartalene, står
+    det ingenting der — ikke null, som ville betydd «ingen endring».
+    """
+    assert _yrke(built, "1111")["endring_bruddkvartal"] is None
+
+
+def test_the_real_wage_index_uses_fixed_weights(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    """Indeksen skal måle lønn, ikke at sammensetningen endret seg.
+
+    5111 er fire ganger større enn 1111 ved start og vokser mindre. Med
+    løpende vekter ville gruppa 5 fått en annen bane; med faste vekter er
+    den bestemt av lønnsendringen alene.
+    """
+    g = io.load("mart.arbeidsmarked_reallonn_gruppe")
+    assert set(g["hovedgruppe"].to_list()) == {"0", "1", "5", "alle"}
+    basis = g.filter(pl.col("kvartal") == "2016K2")
+    assert basis["reallonn_indeks"].to_list() == pytest.approx([100.0] * basis.height)
+    # 1111 er alene i hovedgruppe 1, så indeksen er yrkets egen reallønn.
+    en = g.filter((pl.col("hovedgruppe") == "1") & (pl.col("kvartal") == "2026K2")).row(
+        0, named=True
+    )
+    assert en["reallonn_indeks"] == pytest.approx(
+        1.6 / (KPI_SLUTT / KPI_START) * 100
+    )
+    assert en["lonnstakere_vekt"] == BESTAND["1111"][0]
+
+
+def test_an_empty_model_cannot_pass_its_checks(project) -> None:
+    """En modell som lager null rader består alle radvise sjekker.
+
+    Det er ikke teoretisk: kvartalsuttrykket i mart.konsumpris_kvartal ga
+    tom tabell under utviklingen, og hver eneste sjekk passerte.
+    """
+    import duckdb
+
+    from statman.registry import CheckFailed, run_checks
+
+    con = duckdb.connect()
+    path = io.data_dir() / "tom.parquet"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    con.execute(
+        f"copy (select 1 as a where false) to '{path.as_posix()}' (format parquet)"
+    )
+    # Radvise sjekker sier ingenting om en tom tabell.
+    run_checks(con, "tom", path, ["not_null:a", "a > 0"])
+    with pytest.raises(CheckFailed, match="0 rader"):
+        run_checks(con, "tom", path, ["min_rows:1"])

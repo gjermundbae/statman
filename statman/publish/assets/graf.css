@@ -189,9 +189,12 @@
   paint-order: stroke; stroke: var(--papir); stroke-width: 3px; stroke-linejoin: round;
 }
 
-.merke, .tikk, .bolk { transition: opacity 180ms ease; }
+.merke, .tikk, .bolk, .linje { transition: opacity 180ms ease; }
 .dempet .merke:not(.valgt):not(.i-gruppe) { opacity: 0.18; }
 .dempet .tikk:not(.valgt):not(.i-gruppe) { opacity: 0.28; }
+/* Linjer dempes mindre enn prikker: en linje som forsvinner helt tar med
+   seg formen leseren sammenligner den valgte mot. */
+.dempet .linje:not(.valgt):not(.i-gruppe) { opacity: 0.35; }
 .valgt-ring { fill: none; stroke: var(--blekk); stroke-width: 2; }
 
 /* ------------------------------------------------------------ flisediagram */

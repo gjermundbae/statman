@@ -461,6 +461,11 @@ yrke_lonnstakere:
       «Uoppgitt» (kode 0000) er de 7 600 der den mangler helt."
     - "Kvartalstall. Antall lønnstakere svinger systematisk gjennom året, så
       to kvartaler kan bare sammenlignes med samme kvartal i et annet år."
+    - "SSB endrer alle ett-tall og to-tall i tabellen til 0 eller 3 av
+      personvernhensyn. Tellinger for de aller minste yrkene er altså
+      forstyrret med vilje, og et yrke som står med 0 lønnstakere kan ha én
+      eller to. Det påvirker ikke summene i praksis, men det er grunnen til
+      at yrker under noen få titalls ansatte ikke skal leses som eksakte."
   breaks: []
 
 yrke_vekst_pst:
@@ -487,6 +492,14 @@ yrke_vekst_pst:
       ble bedre, ikke fordi et yrke forsvant. De 12 000 er fordelt ut på de
       andre yrkene, og trekker dermed veksten deres opp med et par tideler
       hver."
+    - "SSB merker tabellen: «Fra 4. kvartal 2024 til 1. kvartal 2025 har
+      kvalitetsforbedringer i innrapporteringen medført større endringer i
+      tabellene med yrke […] Store endringer mellom disse periodene bør
+      tolkes med forsiktighet.» Ett kvartalsskifte står for 70 000 av de
+      473 000 flyttede lønnstakerne i tiårsperioden. Kolonnen
+      endring_bruddkvartal har tallet for hvert yrke, så det kan sjekkes per
+      yrke framfor å tas på tro. Topp- og bunnlistene endrer seg lite når
+      bruddet utelates, men nivåene gjør det."
 
 yrke_median_lonn:
   label: Median månedslønn i yrket
@@ -578,3 +591,37 @@ yrke_avtalt_arbeidstid:
       idrettsdommere, aktivitetsinstruktører — havner nederst uten at det
       sier noe om hva en heltidsstilling i yrket innebærer."
   breaks: []
+
+yrke_reallonn_vekst:
+  label: Reallønnsendring i yrket over ti år
+  model: mart.arbeidsmarked_yrke
+  column: reallonn_vekst_pst
+  unit: andel (0.053 = 5,3 %)
+  source: SSB tabell 11658 (median månedslønn) deflatert med SSB tabell 14700 (KPI, totalindeks)
+  caveats:
+    - "Deflatert med KPI totalindeks til kroner i referansekvartalet. Hele
+      serien flytter seg når SSB publiserer en ny måned og referansen blir
+      et nytt kvartal — oppgi alltid referansekvartalet i figurteksten."
+    - "Endring i yrkets median, ikke i lønna til en person. Et yrke der de
+      eldste går av med pensjon og erstattes av nyutdannede får fallende
+      median uten at noen fikk lønnskutt. Dette måler hva yrket betaler,
+      ikke hva noen opplevde."
+    - "KPI er én prisindeks for hele landet og alle husholdninger. Den er
+      ikke en levekostnadsindeks for den enkelte, og treffer ulikt for folk
+      med ulikt forbruksmønster."
+    - "Målt mellom samme kvartal ti år fra hverandre. Månedslønn svinger
+      gjennom året, blant annet med bonusutbetalinger, og to vilkårlige
+      kvartaler ville blandet sesong med utvikling."
+    - "288 av 407 yrker har tallet. Resten mangler publisert medianlønn i
+      minst én av endene, eller er ikke sammenlignbare over ti år."
+  breaks:
+    - "Lønnsnivået i tabellen har et brudd i 1. kvartal 2020: endringer hos
+      opplysningspliktige ga mer korrekt rapportering og et høyere nivå,
+      sterkest i bergverk og utvinning (+0,6 prosent for gjennomsnittlig
+      månedslønn, +1,2 prosent i olje- og gassutvinning). Yrker i disse
+      næringene får dermed en reallønnsvekst som er noe for høy."
+    - "SSB merker tabellen med at kvalitetsforbedringer i yrkesrapportering
+      mellom 4. kvartal 2024 og 1. kvartal 2025 ga større endringer i
+      yrkesfordelingen, og at store endringer mellom disse periodene bør
+      tolkes med forsiktighet. Det treffer sammensetningen av hvert yrke, og
+      dermed også medianen i det."

@@ -210,6 +210,8 @@ class Mark:
     note: str = ""
     pin: bool = False
     tones: tuple[str, ...] = ()
+    points: tuple[tuple[float, float], ...] = ()
+    point_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,7 +267,7 @@ class Chart:
         return tuple(brukt)
 
 
-KINDS: tuple[str, ...] = ("scatter", "strip", "bars", "treemap")
+KINDS: tuple[str, ...] = ("scatter", "strip", "bars", "treemap", "line")
 
 # Figurtyper som kan farges på flere måter. Lag på en figurtype som ikke står
 # her ville blitt skrevet til fila og aldri tegnet — leseren hadde fått en
@@ -526,6 +528,26 @@ def _sjekk_figur(chart: Chart, seksjon: str) -> list[str]:
 
     if chart.kind == "scatter" and (chart.x is None or chart.y is None):
         feil.append(f"{hvor} er et punktdiagram og trenger begge akser")
+    if chart.kind == "line":
+        if chart.x is None or chart.y is None:
+            feil.append(f"{hvor} er et linjediagram og trenger begge akser")
+        # En linje gjennom ett punkt er et punkt. To er det minste som kan
+        # vise en retning, og retning er hele grunnen til å bruke linje.
+        korte = [m.label for m in chart.marks if len(m.points) < 2]
+        if korte:
+            feil.append(
+                f"{hvor} har {len(korte)} linjer med færre enn to punkter "
+                f"(f.eks. {korte[0]!r})"
+            )
+        skjeve = [
+            m.label for m in chart.marks
+            if m.point_labels and len(m.point_labels) != len(m.points)
+        ]
+        if skjeve:
+            feil.append(
+                f"{hvor} har linjer der punktteksten ikke følger punktene "
+                f"(f.eks. {skjeve[0]!r})"
+            )
     if chart.kind == "bars" and any(not m.segments for m in chart.marks):
         feil.append(f"{hvor} er et søylediagram, men har merker uten segmenter")
     if chart.picker and not chart.link:
@@ -665,6 +687,8 @@ def _chart_from_dict(data: dict[str, Any]) -> Chart:
             note=str(rå.get("note", "")),
             pin=bool(rå.get("pin", False)),
             tones=tuple(str(t) for t in rå.get("tones") or ()),
+            points=tuple((float(x), float(y)) for x, y in rå.get("points") or ()),
+            point_labels=tuple(str(t) for t in rå.get("point_labels") or ()),
         )
 
     def lag(rå: dict[str, Any]) -> Layer:

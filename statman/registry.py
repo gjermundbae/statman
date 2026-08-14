@@ -311,16 +311,32 @@ def run_checks(
 ) -> None:
     """Kjør sjekkene til en modell mot den ferdigskrevne Parquet-fila.
 
-    Tre former:
+    Fire former:
 
     * ``"unique:kolonne[,kolonne2]"`` — kombinasjonen må være unik
     * ``"not_null:kolonne"`` — ingen nullverdier
+    * ``"min_rows:N"`` — tabellen må ha minst ``N`` rader
     * alt annet — SQL-uttrykk som må være sant for hver rad
+
+    ``min_rows`` finnes fordi de tre andre teller *rader som bryter*, og en
+    tom tabell har ingen. En modell som returnerer null rader består derfor
+    alle sjekker den har — den lander like stille som en riktig. Det er den
+    eneste formen som kan feile på ingenting, og den hører hjemme på hver
+    modell der tomt er et mulig utfall av en feil.
     """
     if not checks:
         return
     src = f"read_parquet('{path.as_posix()}')"
     for check in checks:
+        if check.startswith("min_rows:"):
+            minimum = int(check.removeprefix("min_rows:").strip())
+            row = con.execute(f"select count(*) from {src}").fetchone()
+            rows = int(row[0]) if row and row[0] is not None else 0
+            if rows < minimum:
+                raise CheckFailed(
+                    f"{name}: sjekken {check!r} feilet — tabellen har {rows} rader"
+                )
+            continue
         if check.startswith("unique:"):
             cols = ", ".join(c.strip() for c in check.removeprefix("unique:").split(","))
             query = (

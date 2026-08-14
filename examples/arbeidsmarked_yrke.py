@@ -39,17 +39,25 @@ import matplotlib.pyplot as plt  # noqa: E402
 import polars as pl  # noqa: E402
 
 from statman import io, jsonstat, publish  # noqa: E402
+from statman.models.clean_ssb_kpi import RAW_KPI, TOTALINDEKS  # noqa: E402
 from statman.models.clean_ssb_yrke import (  # noqa: E402
     RAW_ALDER,
     RAW_KJONN,
     RAW_KVARTAL,
+    RAW_LONN_KVARTAL,
     RAW_SISTE,
     RAW_SYKEFRAVAER,
     VARIABLER,
     VARIABLER_KJONN,
 )
 from statman.models.clean_styrk import RAW_STYRK  # noqa: E402
-from statman.models.mart_arbeidsmarked import MINSTE_YRKE, PERIODE_AAR  # noqa: E402
+from statman.models.mart_arbeidsmarked import (  # noqa: E402
+    BRUDD_FRA,
+    BRUDD_TIL,
+    MINSTE_YRKE,
+    PERIODE_AAR,
+    UTENFOR_HOVEDGRUPPE,
+)
 from statman.sources import klass, ssb  # noqa: E402
 
 SLUG: Final[str] = "arbeidsmarked_yrke"
@@ -62,7 +70,11 @@ PUBLISERT: Final[str] = "2026-08-13"
 
 MODEL_YRKE: Final[str] = "mart.arbeidsmarked_yrke"
 MODEL_GRUPPE: Final[str] = "mart.arbeidsmarked_hovedgruppe_kvartal"
-MODELS: Final[list[str]] = [MODEL_YRKE, MODEL_GRUPPE]
+MODEL_REALLONN: Final[str] = "mart.arbeidsmarked_reallonn_gruppe"
+MODEL_KPI: Final[str] = "mart.konsumpris_kvartal"
+MODELS: Final[list[str]] = [MODEL_YRKE, MODEL_GRUPPE, MODEL_REALLONN]
+
+TABELL_KPI: Final[str] = "14700"
 
 # Kodeverket hentes slik det gjaldt denne datoen. KLASS har ingen
 # «nyeste»-variant, og en dato satt ved kjøretid ville gjort to hentinger
@@ -77,12 +89,18 @@ METRICS: Final[tuple[str, ...]] = (
     "yrke_gjennomsnittsalder",
     "yrke_sykefravaer",
     "yrke_avtalt_arbeidstid",
+    "yrke_reallonn_vekst",
 )
 
 # Hvor mange yrker som navngis i topp- og bunnlista.
 N_TOPP: Final[int] = 18
 
 LENKE: Final[str] = "yrke"
+
+# Reallønnsfiguren har hovedgrupper som merker, ikke yrker. Egen
+# markeringsgruppe framfor å dele «yrke»: to velgere i samme gruppe ville
+# styrt hverandre, og «Ledere» er ikke det samme som et yrke som heter det.
+LENKE_GRUPPE: Final[str] = "hovedgruppe"
 
 # Fargene i PNG-ene skal være de samme som i figurene sida tegner. Verdiene
 # speiler fargerollene i statman/publish/assets/graf.css, der begrunnelsen
@@ -135,9 +153,20 @@ def ingest() -> dict[str, Path]:
             "Yrke": "*", "Kjonn": "0", "Alder": "0-39,40-54,55+",
             "ContentsCode": "Lonsstakere", "Tid": "TOP(1)",
         }),
+        # Hele lønnsserien. Trengs for reallønn, som må måles mellom to
+        # kvartaler og ikke kan leses av øyeblikksbildet.
+        (RAW_LONN_KVARTAL, TABELL, {
+            "Yrke": "*", "Kjonn": "0", "Alder": "999D",
+            "ContentsCode": "MedianMndLonn", "Tid": "*",
+        }),
         (RAW_SYKEFRAVAER, TABELL_SYKEFRAVAER, {
             "Yrke": "*", "Kjonn": "0",
             "ContentsCode": "Sykefraversprosent", "Tid": "*",
+        }),
+        # Deflatoren. Bare totalindeksen; undergruppene trengs ikke.
+        (RAW_KPI, TABELL_KPI, {
+            "VareTjenesteGrp": TOTALINDEKS,
+            "ContentsCode": "KpiIndMnd", "Tid": "*",
         }),
     )
     for ref, tabell, value_codes in utsnitt:
@@ -209,6 +238,76 @@ def _navneliste(df: pl.DataFrame, antall: int, *, synkende: bool) -> str:
     )
 
 
+def _pp(verdi: float) -> str:
+    """Prosentpoeng. Ikke prosent — differansen mellom to indekstall."""
+    return f"{verdi:.1f}".replace(".", ",")
+
+
+def _fallet(indeks: list[float]) -> tuple[int, int, int | None]:
+    """Største sammenhengende fall i en indeks: (topp, bunn, gjenvunnet).
+
+    Ikke «høyeste og laveste punkt» — de to ligger her i hver sin ende av
+    serien, og ville sagt at reallønnen steg jevnt. Det den skal finne er
+    det største *fallet*: toppen før nedturen, bunnen etter den, og det
+    første punktet som passerer den gamle toppen igjen. ``None`` betyr at
+    den ikke er passert ennå.
+    """
+    topp = bunn = 0
+    lopende_topp = 0
+    verste = 0.0
+    for i, v in enumerate(indeks):
+        if v > indeks[lopende_topp]:
+            lopende_topp = i
+        elif indeks[lopende_topp] - v > verste:
+            verste = indeks[lopende_topp] - v
+            topp, bunn = lopende_topp, i
+    gjenvunnet = next(
+        (i for i in range(bunn, len(indeks)) if indeks[i] > indeks[topp]), None
+    )
+    return topp, bunn, gjenvunnet
+
+
+def _spenn_uten_minste(sivile: pl.DataFrame) -> float:
+    """Spennet i indeks når den minste gruppa holdes utenfor.
+
+    «Bønder, fiskere mv.» har åtte yrker og under 20 000 lønnstakere i
+    vekten, og ligger alene halvannet poeng over de andre. Å oppgi spennet
+    med og uten den er ærligere enn å velge én av dem.
+    """
+    uten = sivile.sort("lonnstakere_vekt").tail(sivile.height - 1)
+    return float(uten["reallonn_indeks"].max() - uten["reallonn_indeks"].min())
+
+
+def _reallonnsliste(df: pl.DataFrame, antall: int, *, synkende: bool) -> str:
+    """Som :func:`_navneliste`, men på reallønn."""
+    rader = df.sort("reallonn_vekst_pst", descending=synkende).head(antall)
+    return ", ".join(
+        f"{rad['yrke_navn'].lower()} ({_pst(rad['reallonn_vekst_pst'])})"
+        for rad in rader.iter_rows(named=True)
+    )
+
+
+def _kvintiler(df: pl.DataFrame) -> dict[str, float]:
+    """Vektet reallønnsvekst i laveste og høyeste lønnskvintil ved start.
+
+    Inndelingen er et valg og gjøres her. Poenget den svarer på er om
+    reallønnsveksten henger sammen med lønnsnivået man startet på — altså om
+    forskjellene mellom yrker ble mindre eller større.
+    """
+    med = df.filter(pl.col("median_lonn_start").is_not_null())
+    kvintil = med.with_columns(
+        pl.col("median_lonn_start").qcut(5, labels=[str(i) for i in range(5)]).alias("_k")
+    )
+    vektet = (
+        kvintil.group_by("_k")
+        .agg(
+            ((pl.col("reallonn_vekst_pst") * pl.col("lonnstakere")).sum()
+             / pl.col("lonnstakere").sum()).alias("vekst")
+        )["vekst"]
+    )
+    return {"lav": float(vektet.min()), "hoy": float(vektet.max())}
+
+
 def _finn(df: pl.DataFrame, navn: str) -> int:
     """Antall lønnstakere i ett navngitt yrke.
 
@@ -270,6 +369,21 @@ LAG: Final[tuple[Lag, ...]] = (
         caption="Målt endring i antall lønnstakere fra samme kvartal ti år før — "
         "ikke en framskriving. Yrker som ikke kan sammenlignes over ti år er "
         "skravert; se metodeavsnittet for hvilke og hvorfor.",
+    ),
+    Lag(
+        key="reallonn",
+        label="Reallønn på 10 år",
+        kolonne="reallonn_vekst_pst",
+        roller=("avvik1", "avvik2", "avvik3", "avvik4", "avvik5"),
+        grenser=(-0.05, 0.0, 0.05, 0.10),
+        tekster=(
+            "ned over 5 %", "ned 0–5 %", "opp 0–5 %",
+            "opp 5–10 %", "opp over 10 %",
+        ),
+        caption="Endring i medianlønn etter at prisveksten er trukket fra. "
+        "Prisene steg 37 prosent i perioden, så en flis som er blå her har "
+        "hatt lønnsvekst *utover* det. De aller fleste flatene ligger i de "
+        "to midterste trinnene — reallønnsveksten er påfallende jevn.",
     ),
     Lag(
         key="kjonn",
@@ -624,6 +738,168 @@ def _plot_hovedgrupper(
     return path
 
 
+def _reallonn_serie(gruppe: pl.DataFrame, kvartal: str) -> tuple[list[str], pl.DataFrame]:
+    """Reallønnsindeksen, samme kvartal hvert år.
+
+    Samme utvalg som resten av saken. Kvartalsserien har en sesongbølge på
+    et par indekspoeng — lønn utbetales ikke jevnt gjennom året — og den er
+    like stor som det ti år med reallønnsvekst utgjør. Med alle kvartaler
+    ville figuren vist bonusutbetalinger.
+    """
+    df = gruppe.filter(pl.col("kvartal").str.slice(4, 2) == kvartal[4:6]).sort("kvartal")
+    return df["kvartal"].unique().sort().to_list(), df
+
+
+def _plot_reallonn(gruppe: pl.DataFrame, path: Path, periode: str, kvartal: str) -> Path:
+    """Reallønnsindeks per hovedgruppe. Poenget er hvor lite de spriker."""
+    kvartaler, df = _reallonn_serie(gruppe, kvartal)
+    fig, ax = plt.subplots(figsize=(12, 7))
+
+    etiketter: list[tuple[float, str]] = []
+    for kode in sorted(df["hovedgruppe"].unique().to_list()):
+        if kode == UTENFOR_HOVEDGRUPPE:
+            continue  # militære yrker og uoppgitt: én yrkeskode, ikke en gruppe
+        serie = df.filter(pl.col("hovedgruppe") == kode).sort("kvartal")
+        alle = kode == "alle"
+        ax.plot(
+            range(len(kvartaler)), serie["reallonn_indeks"].to_list(),
+            linewidth=3.0 if alle else 1.4,
+            color=FARGE_KAT1 if alle else "0.55",
+            alpha=1.0 if alle else 0.75,
+            zorder=3 if alle else 2,
+            label="Alle yrker" if alle else None,
+        )
+        if not alle:
+            etiketter.append((
+                serie["reallonn_indeks"].to_list()[-1],
+                serie["hovedgruppe_navn"][0].removesuffix(" mv."),
+            ))
+
+    # Åtte linjer ender innenfor halvannet indekspoeng, så navnene legger seg
+    # oppå hverandre. Vi skyver dem fra hverandre nedenfra og opp: sorter på
+    # sluttverdi, og løft hver etikett til den har luft under seg.
+    etiketter.sort()
+    luft = (max(v for v, _ in etiketter) - min(v for v, _ in etiketter) or 1.0) * 0.16
+    plassert: list[float] = []
+    for verdi, _ in etiketter:
+        plassert.append(verdi if not plassert else max(verdi, plassert[-1] + luft))
+    for (verdi, navn), y in zip(etiketter, plassert):
+        ax.annotate(
+            navn, (len(kvartaler) - 1, verdi),
+            xytext=(len(kvartaler) - 1 + 0.35, y), textcoords="data",
+            fontsize=7.5, color="0.45", va="center",
+            arrowprops={"arrowstyle": "-", "color": "0.78", "linewidth": 0.6,
+                        "shrinkA": 0, "shrinkB": 2},
+        )
+    # Plass til de lengste gruppenavnene til høyre for siste punkt.
+    ax.set_xlim(-0.4, len(kvartaler) + 4.4)
+
+    ax.axhline(100, color="0.3", linewidth=1.0, linestyle="--")
+    ax.set_xticks(range(len(kvartaler)), [k[:4] for k in kvartaler], fontsize=9)
+    ax.set_ylabel(f"Reallønnsindeks, {kvartaler[0]} = 100")
+    ax.grid(True, axis="y", alpha=0.25, linewidth=0.6)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.legend(frameon=False, fontsize=9, loc="upper left")
+    # Ingen undertittel til høyre: der står gruppenavnene nå.
+    ax.set_title("Ti år, ni yrkesgrupper, nesten samme reallønnsvekst",
+                 loc="left", fontsize=14, fontweight="bold")
+    fig.text(0.01, 0.005,
+             f"Kilde: SSB tabell {TABELL}, deflatert med KPI (tabell "
+             f"{TABELL_KPI}). Målt i {kvartal[4:6].replace('K', '')}. kvartal "
+             f"hvert år. Faste vekter fra {kvartaler[0]}, så indeksen måler "
+             "lønnsendring og ikke at sammensetningen av yrker endret seg."
+             "\nMilitære yrker og uoppgitt er utelatt: gruppa har bare én "
+             "yrkeskode med komplett lønnsserie.",
+             fontsize=8, color="0.35")
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    fig.savefig(path, dpi=144)
+    plt.close(fig)
+    return path
+
+
+def _graf_reallonn(gruppe: pl.DataFrame, kvartal: str, kilde: str) -> publish.Chart:
+    """Reallønnslinjene, tegnet i sida."""
+    kvartaler, df = _reallonn_serie(gruppe, kvartal)
+    # Utsnittet regnes av de linjene som faktisk tegnes. Med hovedgruppe 0
+    # med i regnestykket ble aksen skalert til en serie leseren ikke ser —
+    # gruppa har én yrkeskode og svinger til 123 — og alle de ti linjene
+    # klemte seg sammen i nederste tredjedel.
+    tegnede = df.filter(pl.col("hovedgruppe") != UTENFOR_HOVEDGRUPPE)
+    lav = float(tegnede["reallonn_indeks"].min())
+    hoy = float(tegnede["reallonn_indeks"].max())
+
+    merker = []
+    for kode in sorted(df["hovedgruppe"].unique().to_list()):
+        if kode == UTENFOR_HOVEDGRUPPE:
+            continue
+        serie = df.filter(pl.col("hovedgruppe") == kode).sort("kvartal")
+        rader = list(serie.iter_rows(named=True))
+        alle = kode == "alle"
+        merker.append(publish.Mark(
+            label=rader[0]["hovedgruppe_navn"],
+            tone="kat1" if alle else "noytral",
+            pin=alle,
+            points=tuple((i, round(r["reallonn_indeks"], 2)) for i, r in enumerate(rader)),
+            point_labels=tuple(
+                f"{r['kvartal']} · {_indeks(r['reallonn_indeks'])}" for r in rader
+            ),
+            values=(
+                publish.Readout(
+                    f"Reallønn {periode_av(kvartaler)}",
+                    _pst(rader[-1]["reallonn_indeks"] / 100 - 1),
+                    "vekst" if rader[-1]["reallonn_indeks"] >= 100 else "fall",
+                ),
+                publish.Readout("Yrker i utvalget", str(rader[0]["yrker"])),
+                publish.Readout("Vekt, lønnstakere", _antall(rader[0]["lonnstakere_vekt"])),
+            ),
+        ))
+
+    return publish.Chart(
+        kind="line",
+        marks=tuple(merker),
+        fallback="reallonn.png",
+        alt="Ti linjer med reallønnsindeks per hovedgruppe, alle samlet i et "
+        "smalt bånd rundt hundre.",
+        x=publish.Axis(
+            "", lo=-0.3, hi=len(kvartaler) - 0.7,
+            ticks=tuple(range(len(kvartaler))),
+            tick_labels=tuple(k[:4] for k in kvartaler),
+        ),
+        # Merkene utledes av utsnittet, ikke skrevet inn. Et merke utenfor
+        # [lo, hi] tegnes der aksen ikke er, og havnet under x-etikettene.
+        y=_indeksakse(f"← Reallønnsindeks, {kvartaler[0]} = 100", lav - 1.2, hoy + 1.2),
+        guides=(publish.Guide("y", 100.0, ("samme kjøpekraft som i " + kvartaler[0][:4],)),),
+        link=LENKE_GRUPPE,
+        picker="Framhev yrkesgruppe",
+        caption="Hver linje er én av hovedgruppene, med lønnsveksten deflatert "
+        "med konsumprisindeksen. Vektene er låst til startkvartalet, så linja "
+        "måler hva yrkene betaler og ikke at det ble flere av de godt betalte. "
+        "Båndet er bemerkelsesverdig smalt: ti år, ni yrkesgrupper, og tre "
+        "prosentpoeng mellom den øverste og den nederste — der den øverste er "
+        "den minste gruppa i hele figuren.",
+        source=kilde,
+    )
+
+
+def _indeksakse(etikett: str, lo: float, hi: float, steg: int = 2) -> publish.Axis:
+    """En indeksakse med merker på runde tall *inni* utsnittet."""
+    merker = tuple(
+        v for v in range(int(math.ceil(lo / steg)) * steg, int(hi) + 1, steg)
+    )
+    return publish.Axis(
+        label=etikett, lo=lo, hi=hi,
+        ticks=merker, tick_labels=tuple(str(v) for v in merker),
+    )
+
+
+def periode_av(kvartaler: list[str]) -> str:
+    return f"{kvartaler[0][:4]}–{kvartaler[-1][:4]}"
+
+
+def _indeks(verdi: float) -> str:
+    return f"{verdi:.1f}".replace(".", ",")
+
+
 def _plot_lonn_kjonn(sml: pl.DataFrame, path: Path, periode: str) -> Path:
     """Kvinneandel mot medianlønn, én prikk per yrke."""
     df = sml.filter(pl.col("median_lonn").is_not_null())
@@ -935,7 +1211,11 @@ def _graf_gruppe(df: pl.DataFrame, kilde: str) -> publish.Chart:
 # Artikkel
 # --------------------------------------------------------------------------
 def artikkel(
-    df: pl.DataFrame, gruppe: pl.DataFrame, proveniens: dict[str, str]
+    df: pl.DataFrame,
+    gruppe: pl.DataFrame,
+    reallonn: pl.DataFrame,
+    kpi: pl.DataFrame,
+    proveniens: dict[str, str],
 ) -> publish.Article:
     """Sakspakken som struktur. Notatet og nettsida rendres begge fra denne."""
     sml = df.filter(pl.col("sammenlignbar"))
@@ -1057,6 +1337,89 @@ def artikkel(
         ),
     )
 
+    # --- Reallønn -------------------------------------------------------
+    real = sml.filter(pl.col("reallonn_vekst_pst").is_not_null())
+    real_ned = real.filter(pl.col("reallonn_vekst_pst") < 0)
+    kvartaler, gserie = _reallonn_serie(reallonn, kvartal)
+    alle_serie = gserie.filter(pl.col("hovedgruppe") == "alle").sort("kvartal")
+    indeks = alle_serie["reallonn_indeks"].to_list()
+    aar = [k[:4] for k in kvartaler]
+    topp_i, bunn_i, igjen_i = _fallet(indeks)
+    sivile = gserie.filter(
+        (pl.col("kvartal") == kvartal)
+        & (~pl.col("hovedgruppe").is_in([UTENFOR_HOVEDGRUPPE, "alle"]))
+    )
+    kpi_start = kpi.filter(pl.col("kvartal") == forste["kvartal_start"]).row(0, named=True)
+    prisvekst = kpi.filter(pl.col("kvartal") == kvartal)["kpi"][0] / kpi_start["kpi"] - 1
+
+    # Bruddkvartalet, målt framfor påstått. Brutto bevegelse i det ene
+    # kvartalsskiftet mot brutto bevegelse over hele tiåret.
+    brudd_sum = int(df["endring_bruddkvartal"].abs().sum())
+    endring_sum = int(df["vekst_antall"].abs().sum())
+    brudd_dominans = sml.filter(
+        (pl.col("vekst_antall") != 0)
+        & (pl.col("endring_bruddkvartal").abs() > pl.col("vekst_antall").abs() / 2)
+    ).height
+
+    reallonn_seksjon = publish.Section(
+        "Reallønn",
+        (
+            publish.Stats((
+                publish.Stat(_pst(prisvekst), "Prisvekst", periode),
+                publish.Stat(_pst(indeks[-1] / 100 - 1), "Reallønn, alle yrker",
+                             f"{aar[0]}–{aar[-1]}"),
+                publish.Stat(str(real_ned.height), "Yrker med reallønnsfall",
+                             f"av {real.height} målte"),
+                publish.Stat(
+                    _pp(float(sivile["reallonn_indeks"].max()
+                              - sivile["reallonn_indeks"].min())),
+                    "Prosentpoeng", "mellom øverste og nederste gruppe"),
+            )),
+            publish.Findings((
+                f"Prisene steg {_pst(prisvekst)} på ti år. Medianlønna steg "
+                "mer i nesten alle yrker — men ikke mye mer. For hele "
+                f"utvalget er reallønnsveksten {_pst(indeks[-1] / 100 - 1)} "
+                "over ti år, altså rundt en halv prosent i året.",
+
+                f"**Reallønnen falt i {aar[bunn_i]} tilbake til der den "
+                f"startet.** Indeksen toppet seg i {aar[topp_i]} på "
+                f"{_indeks(indeks[topp_i])}, falt {_pp(indeks[topp_i] - indeks[bunn_i])} "
+                f"poeng til {_indeks(indeks[bunn_i])} i {aar[bunn_i]} — "
+                f"praktisk talt samme kjøpekraft som i {aar[0]}, sju år "
+                "tidligere — og passerte den gamle toppen igjen først i "
+                + (f"{aar[igjen_i]}." if igjen_i is not None else "har ennå ikke passert den."),
+
+                "**Det mest oppsiktsvekkende er hvor likt det slo ut.** "
+                f"Mellom den hovedgruppa som kom best ut og den som kom "
+                "dårligst ut er det "
+                f"{_pp(float(sivile['reallonn_indeks'].max() - sivile['reallonn_indeks'].min()))} "
+                "prosentpoeng — etter ti år, og den øverste er den minste "
+                f"gruppa av alle. Ser man bort fra den, er spennet "
+                f"{_pp(_spenn_uten_minste(sivile))} poeng: ledere, "
+                "renholdere, håndverkere og akademikere fikk i praksis "
+                "samme reallønnsutvikling. Norsk lønnsdannelse er samordnet, "
+                "og dette er hvordan det ser ut i tallene.",
+
+                f"Det gjelder ikke hvert enkelt yrke: {real_ned.height} av "
+                f"{real.height} hadde reallønnsfall, og de sysselsetter "
+                f"{_andel(real_ned['lonnstakere'].sum() / real['lonnstakere'].sum())} "
+                "av lønnstakerne. Størst fall: "
+                f"{_reallonnsliste(real, 3, synkende=False)}. Størst vekst: "
+                f"{_reallonnsliste(real, 3, synkende=True)}.",
+
+                "Og det er ikke slik at de lavest lønte tok igjen de høyest "
+                "lønte. Deler man yrkene i fem etter lønnsnivået i "
+                f"{aar[0]}, ligger reallønnsveksten mellom "
+                f"{_pst(_kvintiler(real)['lav'])} og "
+                f"{_pst(_kvintiler(real)['hoy'])} i alle fem — uten noe "
+                "mønster nedover eller oppover. Lønnsforskjellene mellom "
+                "yrker er omtrent der de var.",
+            )),
+            _graf_reallonn(reallonn, kvartal, f"Kilde: SSB tabell {TABELL}, "
+                           f"deflatert med KPI (tabell {TABELL_KPI})."),
+        ),
+    )
+
     lonn_kjonn = publish.Section(
         "Lønn og kjønn",
         (
@@ -1128,6 +1491,41 @@ def artikkel(
                 "ikke er en lønn, men det kilden skriver når det ikke er noen å "
                 "regne median for. Flisene deres er skravert, ikke lyse.",
 
+                f"**Reallønn er deflatert med KPI totalindeks** (SSB tabell "
+                f"{TABELL_KPI}), til kroner i {kvartal}. Kvartalsindeksen er "
+                "snittet av de tre månedene. Referansekvartalet flytter seg "
+                "når SSB publiserer en ny måned, og hele serien flytter seg "
+                "med den — derfor står det i figurteksten.",
+
+                "Reallønnsindeksen per hovedgruppe bruker **faste vekter** "
+                f"fra {forste['kvartal_start']}, og bare de yrkene som har "
+                "publisert medianlønn i samtlige kvartaler. Med løpende "
+                "vekter ville indeksen blandet sammen to ting: at yrkene "
+                "betalte mer, og at det ble flere ansatte i de yrkene som "
+                "betaler best. Det er det første den skal måle. Prisen er at "
+                "de minste yrkene faller ut — det er de samme som mangler "
+                "median.",
+
+                f"**SSB merker tabellen med et brudd mellom {BRUDD_FRA} og "
+                f"{BRUDD_TIL}**: kvalitetsforbedringer i yrkesrapporteringen "
+                "ga «større endringer i tabellene med yrke», og store "
+                "endringer mellom disse periodene «bør tolkes med "
+                "forsiktighet». Det ligger midt i tiårsperioden, så vi har "
+                f"målt det: {_antall(brudd_sum)} lønnstakere skiftet yrkeskode "
+                f"i det ene kvartalsskiftet, mot {_antall(endring_sum)} over "
+                f"hele tiåret — altså {_andel(brudd_sum / endring_sum)} av all "
+                f"bevegelse i ett av 40 kvartaler. For {brudd_dominans} av de "
+                f"{sml.height} sammenlignbare yrkene er skiftet alene større "
+                "enn halve tiårsendringen. Kolonnen `endring_bruddkvartal` i "
+                "CSV-en har tallet for hvert yrke.",
+
+                "Funnene over tåler det, men ikke uendret. Måler man i "
+                "stedet fra 2016K4 til 2024K4 — utenom bruddet — står de "
+                "samme ni yrkene nederst, i samme rekkefølge, med fall som "
+                "er 3 til 10 prosentpoeng mindre. Retningen er den samme, "
+                "størrelsen er noe mindre. Det er derfor saken snakker om "
+                "hvilke yrker som krympet, og ikke om nøyaktig hvor mye.",
+
                 "**Yrkeskoden settes av arbeidsgiver i a-meldingen** og "
                 "kontrolleres ikke mot faktiske arbeidsoppgaver. En stilling "
                 "kan bytte kode uten at noen bytter jobb, og arbeidsinnholdet "
@@ -1178,7 +1576,7 @@ def artikkel(
             "yrker man *ikke* kan regne ti års endring for."
         ),
         published=PUBLISERT,
-        sections=(funn, ti_aar, lonn_kjonn, metode),
+        sections=(funn, ti_aar, reallonn_seksjon, lonn_kjonn, metode),
         caveats=METRICS,
         provenance={
             "Kilde": f"SSB tabell {TABELL} — {proveniens['label']}",
@@ -1196,6 +1594,7 @@ def artikkel(
             ("fliser.png", "flisediagrammet, farget etter medianlønn"),
             ("vekst_topp_bunn.png", f"topp og bunn {N_TOPP} på tiårsvekst"),
             ("hovedgrupper_tid.png", "de ti hovedgruppene kvartal for kvartal"),
+            ("reallonn.png", "reallønnsindeks per hovedgruppe"),
             ("lonn_kjonn.png", "kvinneandel mot medianlønn"),
             ("hovedgruppe_kjonn.png", "hovedgruppene delt i kvinner og menn"),
         ),
@@ -1224,6 +1623,8 @@ def main() -> list[Path]:
     """Bygg sakspakken. Forutsetter at modellene er bygget."""
     df = io.load(MODEL_YRKE)
     gruppe = io.load(MODEL_GRUPPE)
+    reallonn = io.load(MODEL_REALLONN)
+    kpi = io.load(MODEL_KPI)
     sml = df.filter(pl.col("sammenlignbar"))
     periode = _periode(df.row(0, named=True))
 
@@ -1247,11 +1648,13 @@ def main() -> list[Path]:
         _plot_topp_bunn(sml, target / "vekst_topp_bunn.png", periode),
         _plot_hovedgrupper(gruppe, target / "hovedgrupper_tid.png", periode,
                            df["kvartal_slutt"][0]),
+        _plot_reallonn(reallonn, target / "reallonn.png", periode,
+                       df["kvartal_slutt"][0]),
         _plot_lonn_kjonn(sml, target / "lonn_kjonn.png", periode),
         _plot_gruppe_kjonn(df, target / "hovedgruppe_kjonn.png", periode),
     ]
 
-    art = artikkel(df, gruppe, proveniens)
+    art = artikkel(df, gruppe, reallonn, kpi, proveniens)
     art.validate(target)
     return [
         csv_path,

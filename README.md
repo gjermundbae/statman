@@ -76,11 +76,12 @@ kommuneinndelingen — femten år dekker to kommunereformer, en kommunedeling og
 et titalls grensejusteringer. Begrunnelsen for hvordan det håndteres står i
 `statman/models/mart_befolkning.py`, ikke her.
 
-**`arbeidsmarked`** kobler seks utsnitt av SSBs yrkesstatistikk til 407 yrker i
-STYRK-08, og tegner dem som et flisediagram med seks fargelag. Det tunge der er
-å vite hvilke yrker som *ikke* tåler en tiårsserie: en omkoding i Forsvaret ser
-ut som 365 prosent vekst, og «Uoppgitt» er ikke et yrke. Se
-`statman/models/mart_arbeidsmarked.py`.
+**`arbeidsmarked`** kobler SSBs yrkesstatistikk og konsumprisindeksen til 407
+yrker i STYRK-08, og tegner dem som et flisediagram med sju fargelag — det siste
+er reallønnsutvikling. Det tunge der er å vite hvilke yrker som *ikke* tåler en
+tiårsserie: en omkoding i Forsvaret ser ut som 365 prosent vekst, «Uoppgitt» er
+ikke et yrke, og SSB merker selv et brudd i yrkesrapporteringen midt i perioden.
+Se `statman/models/mart_arbeidsmarked.py`.
 
 ## Analyse
 
@@ -166,7 +167,7 @@ en PNG under seg for den som ikke har JavaScript:
 
 ```python
 publish.Chart(
-    kind="scatter",                     # scatter · strip · bars · treemap
+    kind="scatter",                     # scatter · strip · bars · treemap · line
     marks=(
         publish.Mark(
             label="Ibestad", group="Troms",
@@ -228,6 +229,27 @@ Oppdelingen regnes ut i sida (squarified treemap); analysen sier bare hvor stor
 en flate er. PNG-en under kan bare vise ett av lagene, og det skal stå i
 bildeteksten hvilket.
 
+### Linjediagram
+
+`kind="line"` tegner én linje per merke. Merket bærer da en *serie* framfor ett
+punkt:
+
+```python
+publish.Mark(
+    label="Alle yrker", tone="kat1", pin=True,
+    points=((0, 100.0), (4, 104.5), (7, 100.3), (10, 105.3)),
+    point_labels=("2016K2 · 100,0", "2020K2 · 104,5",
+                  "2023K2 · 100,3", "2026K2 · 105,3"),
+    values=(publish.Readout("Reallønn", "+5,3 %", "vekst"),),
+)
+```
+
+`point_labels` er det boblen viser for punktet leseren peker på, ferdig
+formatert; `values` er merkets faste avlesninger under. `pin` gir linja navn
+der den slutter og tegner den tykkere — bruk den på den ene serien som er
+målestokken. Punktene tegnes slik de kom: ingen utjevning, og et hull blir et
+hull framfor en rett strekning.
+
 Alt annet gjelder som før: tallene kommer ferdig formatert, og sida verken
 teller, summerer eller velger utvalg. Den regner bare ut hvor på skjermen et
 merke skal stå.
@@ -238,7 +260,10 @@ merke skal stå.
    `io.write_raw` og aldri tolker innholdet.
 2. En `clean.<navn>`-modell som typer og normaliserer. For json-stat2 gjør
    `jsonstat.to_frame` utbrettingen; modellen gjør resten i SQL.
-3. Sjekker på modellen. To til fire, og hver av dem skal kunne feile.
+3. Sjekker på modellen. To til fire, og hver av dem skal kunne feile. Ta med
+   `min_rows:1` — de andre formene teller *rader som bryter*, og en tom tabell
+   har ingen. Uten den lander en modell som lager ingenting like stille som en
+   riktig.
 4. En rad i `catalog/metrics.yml` — særlig `caveats` og `breaks`.
 
 Modellkontrakten i sin helhet står i docstringen til `statman/registry.py`.
