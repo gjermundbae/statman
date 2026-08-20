@@ -582,3 +582,64 @@ def test_punkttekst_som_ikke_følger_punktene_stopper(katalog: Path) -> None:
     )
     with pytest.raises(ValueError, match="punktteksten ikke følger punktene"):
         lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+# --------------------------------------------------------------------------
+# Figurflata
+# --------------------------------------------------------------------------
+def _regel(css: str, velger: str) -> str:
+    """Innholdet i regelen der ``velger`` står alene, på egen linje.
+
+    Anker til linjestart, ellers treffer «.figur.full» først inne i
+    «.ark > section > .figur.full» — som er en helt annen regel.
+    """
+    start = css.index("\n" + velger + " {") + 1
+    return css[start : css.index("}", start)]
+
+
+def test_full_bredde_figur_har_eksplisitt_bredde() -> None:
+    """`margin-inline: auto` uten `width` gjør figuren shrink-to-fit.
+
+    Da bestemmes bredden av det bredeste barnet som har en egen intrinsisk
+    bredde. For en PNG er det bildet, som er bredt nok til at ingen merker
+    det. For en figur sida tegner selv er det *bildeteksten*, som er låst til
+    tekstspennet — så flisediagrammet rendret på 592 piksler der det skulle
+    hatt 1440, og all skrift i det ble halvert. Ingenting så ødelagt ut.
+    """
+    from statman.publish import article as art_mod
+
+    css = (Path(art_mod.__file__).parent / "assets" / "statman.css").read_text("utf-8")
+    regel = _regel(css, ".figur.full")
+    assert "margin-inline: auto" in regel
+    assert "width: 100%" in regel, "en full-bredde figur må sette width, ikke bare max-width"
+
+
+def test_hver_figurtype_har_en_tegner() -> None:
+    """En type som finnes i Python, men ikke i skriptet, faller til PNG.
+
+    Uten dette kan `KINDS` utvides uten at noen oppdager at figuren aldri
+    tegnes — sida ser riktig ut, den viser bare fallback-bildet.
+    """
+    from statman.publish import article as art_mod
+
+    js = (Path(art_mod.__file__).parent / "assets" / "graf.js").read_text("utf-8")
+    mangler = [k for k in art_mod.KINDS if f'spek.kind === "{k}"' not in js]
+    assert not mangler, f"figurtyper uten tegner i graf.js: {mangler}"
+
+
+def test_berøring_slår_av_hover_og_lar_trykket_styre() -> None:
+    """På berøring fyrer pointerleave rett etter hvert trykk.
+
+    Uten filteret ville boblen vist seg og forsvunnet i samme bevegelse, og
+    pointermove under en rulling ville fått den til å blinke hele veien.
+    """
+    from statman.publish import article as art_mod
+
+    js = (Path(art_mod.__file__).parent / "assets" / "graf.js").read_text("utf-8")
+    assert 'ev.pointerType === "touch"' in js
+    # Ingen figur skal registrere pointermove/pointerleave direkte forbi
+    # filteret — da er berøring uhåndtert i nettopp den figuren.
+    assert 'addEventListener("pointermove"' not in js.split("function paaPeker")[1].split("function paaPekerUt")[0][200:]
+    for hendelse in ("pointermove", "pointerleave"):
+        direkte = js.count(f'addEventListener("{hendelse}"')
+        assert direkte == 1, f"{hendelse} registreres {direkte} steder, ventet bare i hjelperen"

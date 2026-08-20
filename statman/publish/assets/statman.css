@@ -24,6 +24,10 @@
   --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
 
   --spenn: 37rem;
+  /* Hvor bredt en «full» figur får bli. Tekstspennet er 37rem fordi en
+     linje ikke skal bli lang å lese; en figur har ikke det problemet, og
+     et flisediagram med 400 flater har det motsatte. */
+  --full-bredde: 90rem;
   --kant: 1.5rem;
   --runding: 10px;
 }
@@ -263,7 +267,18 @@ code {
 
 /* ------------------------------------------------------------------ figurer */
 .figur { margin: 2.6rem 0; }
-.figur.full { max-width: 72rem; margin-inline: auto; }
+/* `width: 100%` er ikke overflødig. Uten den gjør `margin-inline: auto` at
+   figuren blir en shrink-to-fit-boks: automargene suger opp ledig plass, og
+   bredden bestemmes av det bredeste barnet med egen intrinsisk bredde. For
+   en PNG er det bildet, som er bredt nok til at ingen merker det. For en
+   figur sida tegner selv er det *bildeteksten*, som er begrenset til
+   tekstspennet — så flisediagrammet rendret på 592 piksler der det skulle
+   hatt 1440, og all skrift i det ble halvert. */
+.figur.full {
+  width: 100%;
+  max-width: var(--full-bredde);
+  margin-inline: auto;
+}
 .figur a { display: block; text-decoration: none; }
 .figur img {
   display: block; width: 100%; height: auto;

@@ -128,10 +128,56 @@
   function visBoble(boble, vert, mark, klientX, klientY) {
     if (!mark) { boble.classList.remove("pa"); return; }
     fyllBoble(boble, mark);
-    var ramme = vert.getBoundingClientRect();
-    boble.style.left = (klientX - ramme.left) + "px";
-    boble.style.top = (klientY - ramme.top) + "px";
     boble.classList.add("pa");
+
+    // Boblen er midtstilt over punktet. Uten grenser havner den utenfor
+    // figuren når punktet ligger nær en kant — på en telefon betyr det
+    // utenfor skjermen: et trykk på flisa lengst til venstre satte den på
+    // -107 piksler. Vi holder den innenfor, og snur den under punktet når
+    // det ikke er høyde igjen over. Dette er ombrekking, ikke en påstand om
+    // tallene: det som står i boblen er det samme uansett hvor den havner.
+    var ramme = vert.getBoundingClientRect();
+    var egen = boble.getBoundingClientRect();
+    var halv = egen.width / 2, luft = 6;
+    var x = klientX - ramme.left;
+    var y = klientY - ramme.top;
+    if (ramme.width > egen.width + luft * 2) {
+      x = Math.max(halv + luft, Math.min(ramme.width - halv - luft, x));
+    }
+    boble.classList.toggle("under", y - egen.height - 14 < 0);
+    boble.style.left = x + "px";
+    boble.style.top = y + "px";
+  }
+
+  /* ------------------------------------------------------------- berøring */
+  // En berøringsskjerm har ingen peker som svever, så «hold musa over» finnes
+  // ikke der. Løsningen er ikke å gjette på skjermbredde — et nettbrett på
+  // 1400 piksler er fortsatt berøring, og en mus koblet til det er fortsatt
+  // en mus — men å se på hva slags peker hendelsen faktisk kom fra.
+  //
+  // To ting må håndteres, og de trekker hver sin vei:
+  //
+  //   * pointermove fyrer hele veien mens en finger drar for å *rulle*. Uten
+  //     filteret blinker boblen fram og tilbake gjennom hele rullingen.
+  //   * pointerleave fyrer når fingeren løftes, altså rett etter hvert trykk.
+  //     Uten filteret ville boblen vist seg og forsvunnet i samme bevegelse.
+  //
+  // Derfor: på berøring styrer trykket alene, og boblen blir stående til
+  // neste trykk. På mus er alt som før.
+  function erBeroring(ev) { return !!ev && ev.pointerType === "touch"; }
+
+  function paaPeker(el, handler) {
+    el.addEventListener("pointermove", function (ev) {
+      if (erBeroring(ev)) return;
+      handler(ev);
+    });
+  }
+
+  function paaPekerUt(el, handler) {
+    el.addEventListener("pointerleave", function (ev) {
+      if (erBeroring(ev)) return;
+      handler(ev);
+    });
   }
 
   /* ----------------------------------------------------- markeringsgrupper */
@@ -310,16 +356,19 @@
       return bd < 30 ? best : null;
     }
 
-    flate.addEventListener("pointermove", function (ev) {
+    function visVed(ev) {
       var m = naermest(ev);
-      if (!m) return visBoble(boble, vert, null);
+      if (!m) { visBoble(boble, vert, null); return null; }
       var r = s.getBoundingClientRect(), k = r.width / B;
       visBoble(boble, vert, m, r.left + m._x * k, r.top + (m._y - m._r) * k);
-    });
-    flate.addEventListener("pointerleave", function () { visBoble(boble, vert, null); });
+      return m;
+    }
+    paaPeker(flate, visVed);
+    paaPekerUt(flate, function () { visBoble(boble, vert, null); });
     flate.addEventListener("click", function (ev) {
-      var m = naermest(ev);
-      velg(g, m ? m.label : null);
+      // Trykket viser boblen *og* velger. På mus er visningen allerede gjort
+      // av pointermove; på berøring er dette den eneste sjansen.
+      velg(g, (visVed(ev) || {}).label || null);
     });
 
     g.lyttere.push(function (valgt, filter) {
@@ -420,12 +469,14 @@
       var i = Math.round(x.inv((ev.clientX - r.left) / (r.width / B)));
       return spek.marks[Math.max(0, Math.min(n - 1, i))];
     }
-    flate.addEventListener("pointermove", function (ev) {
+    function visVed(ev) {
       var m = ved(ev), r = s.getBoundingClientRect();
       visBoble(boble, vert, m, ev.clientX, r.top + topp * (r.width / B));
-    });
-    flate.addEventListener("pointerleave", function () { visBoble(boble, vert, null); });
-    flate.addEventListener("click", function (ev) { velg(g, ved(ev).label); });
+      return m;
+    }
+    paaPeker(flate, visVed);
+    paaPekerUt(flate, function () { visBoble(boble, vert, null); });
+    flate.addEventListener("click", function (ev) { velg(g, visVed(ev).label); });
 
     g.lyttere.push(function (valgt, filter) {
       spek.marks.forEach(function (m) {
@@ -515,15 +566,17 @@
         var r = s.getBoundingClientRect();
         visBoble(boble, vert, m, klientX, r.top + (mt + i * radh) * (r.width / B));
       }
-      treff.addEventListener("pointermove", function (ev) { pek(ev.clientX, ev.clientY); });
-      treff.addEventListener("pointerleave", function () { visBoble(boble, vert, null); });
+      paaPeker(treff, function (ev) { pek(ev.clientX, ev.clientY); });
+      paaPekerUt(treff, function () { visBoble(boble, vert, null); });
       // Samme opplysning på tastaturfokus som på hover.
       treff.addEventListener("focus", function () {
         var r = treff.getBoundingClientRect();
         pek(r.left + r.width / 2, r.top);
       });
       treff.addEventListener("blur", function () { visBoble(boble, vert, null); });
-      treff.addEventListener("click", function () {
+      treff.addEventListener("click", function (ev) {
+        var r = treff.getBoundingClientRect();
+        pek(ev.clientX || r.left + r.width / 2, ev.clientY || r.top);
         filtrer(g, g.filter === m.label ? "" : m.label);
       });
       treff.addEventListener("keydown", function (ev) {
@@ -615,9 +668,9 @@
       return bd < 40 ? best : null;
     }
 
-    flate.addEventListener("pointermove", function (ev) {
+    function visVed(ev) {
       var treff = naermest(ev);
-      if (!treff) { ring.setAttribute("opacity", 0); return visBoble(boble, vert, null); }
+      if (!treff) { ring.setAttribute("opacity", 0); visBoble(boble, vert, null); return null; }
       ring.setAttribute("cx", treff.x);
       ring.setAttribute("cy", treff.y);
       ring.setAttribute("opacity", 1);
@@ -629,13 +682,15 @@
         group: treff.mark.point_labels[treff.i] || "",
         values: treff.mark.values
       }, r.left + treff.x * k, r.top + treff.y * k);
-    });
-    flate.addEventListener("pointerleave", function () {
+      return treff;
+    }
+    paaPeker(flate, visVed);
+    paaPekerUt(flate, function () {
       ring.setAttribute("opacity", 0);
       visBoble(boble, vert, null);
     });
     flate.addEventListener("click", function (ev) {
-      var treff = naermest(ev);
+      var treff = visVed(ev);
       velg(g, treff && treff.mark.label !== g.valgt ? treff.mark.label : null);
     });
 
@@ -724,9 +779,39 @@
 
   // Gruppenavnet får bare stå der det får plass. Anslaget må være et anslag:
   // om overskriften vises avgjør hvor mye høyde barna får, og den
-  // beslutningen må tas før de er lagt ut — altså før noe kan måles. 6,6
-  // enheter per tegn er målt på den halvfete 11,5-pikselsskriften.
-  function passer(tekst, bredde) { return tekst.length * 6.6 + 8 <= bredde; }
+  // beslutningen må tas før de er lagt ut — altså før noe kan måles. 0,58
+  // av skriftstørrelsen per tegn er målt på den halvfete skriften i
+  // .flis-gruppe. Endrer du den, mål på nytt — et for lavt anslag lar de
+  // lengste gruppenavnene renne ut over nabogruppa.
+  function passer(tekst, bredde, skrift) {
+    return tekst.length * skrift * 0.58 + 8 <= bredde;
+  }
+
+  // Et flisediagram er bredt og lavt på en skjerm og høyt og smalt på en
+  // telefon — ikke fordi det er moderne, men fordi 400 flater i 375 × 242
+  // piksler er 227 kvadratpiksler hver, og ingen finger treffer det. Et
+  // stående utsnitt gir dobbelt så mye flate til de samme flisene.
+  //
+  // Skriftstørrelsene følger med, og de står her og ikke i CSS fordi
+  // oppsettet trenger dem *før* noe er tegnet: hvor høy tittelstripa blir,
+  // og om gruppenavnet i det hele tatt får plass, avgjøres av dem.
+  // Skriften oppgis i den *rendrede* størrelsen vi vil ha, og regnes om til
+  // viewBox-enheter etter hvor mye figuren faktisk skaleres. Da er en
+  // gruppeoverskrift 16 piksler på en 1440 piksler bred skjerm og 16 piksler
+  // på en telefon — i stedet for 16 og 4, som er det en fast enhetsstørrelse
+  // gir. Konsekvensen er at teksten tar *flere enheter* på en liten skjerm og
+  // dermed at færre flisenavn får plass, og det er riktig vei: et navn som
+  // ikke kan leses er ikke verdt flata det dekker.
+  function flisemaal(bredde) {
+    var staaende = bredde < 700;
+    var B = staaende ? 760 : 1180;
+    var enhet = B / Math.max(bredde, 1);
+    function px(maal) { return Math.round(maal * enhet * 10) / 10; }
+    return {
+      B: B, H: staaende ? 1010 : 760,
+      gruppe: px(16), navn: px(13.5), tall: px(11.5), tittel: px(21)
+    };
+  }
 
   function tegnFliser(spek, vert, boble, g) {
     // Større viewBox enn de andre figurene, med samme sideforhold. Skriften
@@ -735,7 +820,8 @@
     // på seks av fire hundre; 1180 gir det på rundt tjuefem. Prisen er at
     // figuren tåler mindre nedskalering før teksten blir liten — den er
     // «full» bredde nettopp derfor, og PNG-en er der for resten.
-    var B = 1180, H = 760, luft = 3, tittelhoyde = 15;
+    var maal = flisemaal(vert.getBoundingClientRect().width);
+    var B = maal.B, H = maal.H, luft = 3, tittelhoyde = maal.tittel;
     var s = el("svg", {
       viewBox: "0 0 " + B + " " + H, role: "img", "aria-label": spek.alt
     });
@@ -785,10 +871,12 @@
         // Gruppenavnet får en egen stripe på toppen, men bare når gruppa er
         // stor nok til at stripa ikke spiser opp flisene den navngir.
         var topp = 0;
-        if (h > 46 && passer(bolk.navn, b)) {
-          lag.appendChild(txt(el("text", {
-            class: "flis-gruppe", x: x + 1, y: y + 11
-          }), bolk.navn));
+        if (h > tittelhoyde * 2.9 && passer(bolk.navn, b, maal.gruppe)) {
+          var tittel = txt(el("text", {
+            class: "flis-gruppe", x: x + 1, y: y + tittelhoyde * 0.72
+          }), bolk.navn);
+          tittel.style.fontSize = maal.gruppe + "px";
+          lag.appendChild(tittel);
           topp = tittelhoyde;
         }
         squarify(bolk.barn.map(function (m) { return { verdi: m.size, mark: m }; }),
@@ -826,13 +914,19 @@
     s._etiketter = function () {
       tekster.replaceChildren();
       spek.marks.forEach(function (m) {
-        if (!m._el || m._b < 30 || m._h < 15) return;
+        if (!m._el || m._b < maal.navn * 2.6 || m._h < maal.navn * 1.3) return;
         var plass = m._b - 7;
-        var navn = txt(el("text", { class: "flis-navn", x: m._x + 4, y: m._y + 12.5 }), m.label);
+        var navn = txt(el("text", {
+          class: "flis-navn", x: m._x + 4, y: m._y + maal.navn * 1.09
+        }), m.label);
+        navn.style.fontSize = maal.navn + "px";
         tekster.appendChild(navn);
         if (navn.getBBox().width > plass) { navn.remove(); return; }
-        if (m._h < 31 || !m.note) return;
-        var tall = txt(el("text", { class: "flis-tall", x: m._x + 4, y: m._y + 25 }), m.note);
+        if (m._h < maal.navn * 2.7 || !m.note) return;
+        var tall = txt(el("text", {
+          class: "flis-tall", x: m._x + 4, y: m._y + maal.navn * 2.17
+        }), m.note);
+        tall.style.fontSize = maal.tall + "px";
         tekster.appendChild(tall);
         if (tall.getBBox().width > plass) tall.remove();
       });
@@ -860,15 +954,20 @@
       return treff;
     }
 
-    flate.addEventListener("pointermove", function (ev) {
+    function visVed(ev) {
       var m = ved(ev);
-      if (!m) return visBoble(boble, vert, null);
+      if (!m) { visBoble(boble, vert, null); return null; }
       var r = s.getBoundingClientRect(), k = r.width / B;
       visBoble(boble, vert, m, r.left + (m._x + m._b / 2) * k, r.top + m._y * k);
-    });
-    flate.addEventListener("pointerleave", function () { visBoble(boble, vert, null); });
+      return m;
+    }
+    paaPeker(flate, visVed);
+    paaPekerUt(flate, function () { visBoble(boble, vert, null); });
     flate.addEventListener("click", function (ev) {
-      var m = ved(ev);
+      // Ett trykk gjør begge deler: viser tallene og markerer flisa. Å treffe
+      // samme flis igjen fjerner markeringen, men lar boblen stå — fingeren
+      // peker fortsatt på den.
+      var m = visVed(ev);
       velg(g, m && m.label !== g.valgt ? m.label : null);
     });
 

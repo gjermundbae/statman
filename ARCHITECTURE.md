@@ -167,6 +167,26 @@ byggegrafen er egen kode: Plotly er 3,5 megabyte og forutsetter et CDN, og
 begge deler bryter regelen om én selvstendig fil. Figurene arver sidas
 CSS-variabler, så mørk modus og typografi bare virker.
 
+### Berøring
+
+En figur som bare svarer på hover er en figur uten interaktivitet på telefon,
+og det er der de fleste leser. Løsningen er ikke å gjette på skjermbredde — et
+nettbrett på 1400 piksler er berøring, og en mus koblet til det er ikke — men å
+se på `pointerType` på hendelsen som faktisk kom.
+
+To ting må da håndteres, og de trekker hver sin vei. `pointermove` fyrer hele
+veien mens en finger drar for å *rulle*, så uten filter blinker boblen gjennom
+hele rullingen. `pointerleave` fyrer når fingeren løftes, altså rett etter
+hvert trykk, så uten filter vises og forsvinner boblen i samme bevegelse.
+Derfor: på berøring styrer trykket alene, og boblen blir stående til neste
+trykk. På mus er alt som før.
+
+Boblen må også kunne plasseres. Den er midtstilt over punktet, og et trykk på
+flisa lengst til venstre satte den på -107 piksler — utenfor skjermen. Den
+holdes nå innenfor figuren og snus under punktet når det ikke er høyde igjen
+over. Det er ombrekking, ikke en påstand: innholdet er det samme uansett hvor
+den havner.
+
 Interaktivitet legges til der leseren er en av radene. Kommunesaken har 323
 kommuner med hvert sitt navn; en leser fra Ibestad skal kunne finne Ibestad.
 En figur som viser en *fordeling* og ikke identiteter — spaghettiplottene —
@@ -256,13 +276,22 @@ Reservert, ikke glemt. Hver av dem bygges når en konkret analyse krever det:
   har ingen annen form. Merket bærer nå `points` og `point_labels`, altså en
   serie i stedet for ett punkt, og rente_bolig og preben-sakene kan bruke den
   uten flere endringer i figurlaget.
-- **Figurtypografi på små skjermer.** En fast `viewBox` skalerer teksten ned
-  med bredden, så aksemerkene blir små under ~500 piksler. Løsningen er kjent —
-  eget utsnitt og færre merker under et brytepunkt — og gjøres når noen leser
-  en av sakene på telefon og blir irritert. Flisediagrammet gjør det verre og
-  tydeligere på én gang: der er *antall* etiketter en funksjon av
-  viewBox-oppløsningen, og 1180 enheter mot 860 er forskjellen på seks navn og
-  tjuefem. Den ble valgt for skjerm; på telefon er PNG-en fortsatt figuren.
+- **Figurtypografi på små skjermer.** *Løst for flisediagrammet, utsatt for
+  resten.* En fast `viewBox` skalerer teksten ned med bredden, så aksemerkene
+  blir små under ~500 piksler.
+
+  Flisediagrammet løser det ved å snu problemet: skriftstørrelsene oppgis i
+  den *rendrede* størrelsen figuren skal ha, og regnes om til viewBox-enheter
+  etter hvor mye figuren faktisk skaleres. En gruppeoverskrift er da 16 piksler
+  på 1440 og 16 piksler på 360, i stedet for 16 og 4. Prisen betales i
+  etiketter og ikke i lesbarhet: på en liten skjerm tar teksten flere enheter,
+  så færre flisenavn får plass — og et navn som ikke kan leses er ikke verdt
+  flata det dekker. Under 700 piksler bytter figuren i tillegg til et stående
+  utsnitt, fordi 400 flater i 375 × 242 piksler er 227 kvadratpiksler hver og
+  ingen finger treffer det.
+
+  De andre figurtypene har fortsatt faste enheter. Grepet er kjent nå, og
+  flyttes dit når noen blir irritert på en akse.
 - **Tastaturnavigasjon i punktskyer.** Søylene kan fokuseres, nedtrekket virker,
   og tabellen har tallene. Å tabbe mellom 323 prikker er derimot ikke løst, og
   krever noe smartere enn `tabindex` på hver av dem.

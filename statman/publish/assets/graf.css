@@ -113,6 +113,16 @@
   .ark > section > .graf-lagtekst.full,
   .ark > section > .graf-tegn.full { grid-column: full; }
 }
+/* Panelet, tegnforklaringen og lagteksten hører til figuren og må stå på
+   samme bredde som den. De er egne rutenettbarn, så de arver ikke taket
+   hennes — uten dette rant de ut i hele vinduet mens figuren sto midtstilt. */
+.graf-styring.full,
+.graf-lagtekst.full,
+.graf-tegn.full {
+  width: 100%;
+  max-width: var(--full-bredde);
+  margin-inline: auto;
+}
 
 /* ------------------------------------------------------------- styrepanel */
 .graf-styring {
@@ -123,6 +133,12 @@
   border: 1px solid var(--strek);
   border-radius: var(--runding);
 }
+/* Et <select> tar bredden til sitt lengste alternativ, og «Høyere
+   saksbehandlere i offentlig og privat virksomhet  92 092» er langt. Uten
+   taket ble nedtrekket 536 piksler bredt i et panel på 375 og stakk ut av
+   skjermen på telefon. min-width holder det brukbart bredt på store
+   skjermer; max-width hindrer at det sprenger små. */
+.graf-styring > div { min-width: 0; max-width: 100%; }
 .graf-styring label {
   display: block;
   font: 600 0.68rem/1.4 var(--sans);
@@ -138,6 +154,7 @@
   border: 1px solid var(--strek-mork);
   border-radius: 6px;
   min-width: 13rem;
+  max-width: 100%;
   appearance: none; cursor: pointer;
   background-image:
     linear-gradient(45deg, transparent 50%, currentColor 50%),
@@ -207,19 +224,24 @@
 .flis-ramme { fill: none; stroke: var(--strek-mork); stroke-width: 1; }
 .flis-valgt { fill: none; stroke: var(--blekk); stroke-width: 2.5; }
 
-/* Navnet står bare i flisene som har plass til det. Resten har boblen, og
-   den valgte flisa får navnet sitt uansett hvor liten den er. */
+/* Navnet står bare i flisene som har plass til det. Resten har boblen.
+
+   Skriftstørrelsene her er utgangspunktet; skriptet overstyrer dem per
+   figur. Grunnen er at oppsettet trenger dem *før* noe er tegnet — hvor høy
+   gruppestripa blir, og om gruppenavnet får plass i det hele tatt, avgjøres
+   av dem — og et flisediagram bytter til et stående utsnitt med større
+   skrift under 600 piksler. Se `flisemaal` i graf.js. */
 /* Hvit tekst på flisen, med en tynn mørk kontur under. Konturen er der
    fordi flisene spenner fra nesten hvitt til mørkeblått i samme figur —
    uten den forsvinner navnet på de lyseste. */
 .flis-navn {
-  font-size: 11px; font-weight: 600; fill: #fff;
+  font-size: 11.5px; font-weight: 600; fill: #fff;
   pointer-events: none;
   paint-order: stroke; stroke: rgba(0, 0, 0, 0.45);
   stroke-width: 2px; stroke-linejoin: round;
 }
 .flis-tall {
-  font-size: 9.5px; fill: #fff; fill-opacity: 0.85;
+  font-size: 10px; fill: #fff; fill-opacity: 0.85;
   pointer-events: none;
   paint-order: stroke; stroke: rgba(0, 0, 0, 0.45);
   stroke-width: 2px; stroke-linejoin: round;
@@ -228,7 +250,7 @@
 /* Gruppenavnet ligger over gruppa si, i sidas blekk — det er en overskrift
    på figuren, ikke en verdi i den. */
 .flis-gruppe {
-  font-size: 11.5px; font-weight: 650; fill: var(--dempet);
+  font-size: 13.5px; font-weight: 650; fill: var(--dempet);
   letter-spacing: 0.02em; pointer-events: none;
 }
 
@@ -272,7 +294,11 @@
 .graf-boble {
   position: absolute; z-index: 5; pointer-events: none; opacity: 0;
   transform: translate(-50%, calc(-100% - 14px));
-  min-width: 11rem; max-width: 16rem;
+  min-width: 11rem;
+  /* Aldri bredere enn figuren selv. På en telefon er 16rem nesten hele
+     bredden, og en boble som er bredere enn flata den hører til kan ikke
+     plasseres noe sted uten å stikke ut. */
+  max-width: min(16rem, 100%);
   padding: 0.6rem 0.75rem;
   background: var(--flate);
   border: 1px solid var(--strek-mork);
@@ -282,6 +308,8 @@
   transition: opacity 120ms ease;
 }
 .graf-boble.pa { opacity: 1; }
+/* Snudd: står under punktet når det ikke er plass over det. */
+.graf-boble.under { transform: translate(-50%, 14px); }
 .graf-boble .navn {
   font-family: var(--serif); font-size: 1.02rem; font-weight: 600;
   color: var(--blekk); line-height: 1.2;
