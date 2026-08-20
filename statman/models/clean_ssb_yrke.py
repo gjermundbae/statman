@@ -18,6 +18,12 @@ navn. Tre ting er verdt å vite:
   for få observasjoner. De radene finnes ikke her, og blir dermed null i
   mart-koblingen framfor å bli forvekslet med en målt null.
 
+* **Noen utsnitt er øyeblikksbilder, andre er hele serien.** Bestanden,
+  medianlønna, kjønnsdelingen, snittalderen og arbeidstida hentes kvartal for
+  kvartal tilbake til 2016; aldersbåndene og de kjønnsdelte lønnene bare for
+  siste kvartal. Skillet er ikke prinsipielt, det er hva figurene trenger: en
+  tidslinje leseren kan dra i krever en serie bak hvert lag den fargelegger.
+
 Yrkeskoden er den samme STYRK-08-koden i begge tabellene, så de kobler rett
 på hverandre og på ``clean.styrk``.
 """
@@ -33,7 +39,9 @@ RAW_KVARTAL: Final[str] = "ssb/11658_kvartal"
 RAW_LONN_KVARTAL: Final[str] = "ssb/11658_lonn_kvartal"
 RAW_SISTE: Final[str] = "ssb/11658_siste"
 RAW_KJONN: Final[str] = "ssb/11658_kjonn"
+RAW_KJONN_KVARTAL: Final[str] = "ssb/11658_kjonn_kvartal"
 RAW_ALDER: Final[str] = "ssb/11658_alder"
+RAW_TREKK_KVARTAL: Final[str] = "ssb/11658_trekk_kvartal"
 RAW_SYKEFRAVAER: Final[str] = "ssb/14789_sykefravaer"
 
 # Statistikkvariablene vi henter fra 11658. Lista står her, ikke bare i
@@ -46,8 +54,15 @@ VARIABLER: Final[tuple[str, ...]] = (
 )
 VARIABLER_KJONN: Final[tuple[str, ...]] = ("Lonsstakere", "MedianMndLonn")
 
+# Variablene som beskriver hvem som har yrket, ikke hvor mange. Hentes
+# over hele serien, ikke bare siste kvartal, fordi tidslinja i sida lar
+# leseren stille dem tilbake i tid. Se moduldocstringen til
+# ``mart.arbeidsmarked_yrke_aar``.
+VARIABLER_TREKK: Final[tuple[str, ...]] = ("GjsnAlder", "GjAvtArbtid")
+
 _FILTER = ", ".join(f"'{code.lower()}'" for code in VARIABLER)
 _FILTER_KJONN = ", ".join(f"'{code.lower()}'" for code in VARIABLER_KJONN)
+_FILTER_TREKK = ", ".join(f"'{code.lower()}'" for code in VARIABLER_TREKK)
 
 
 @model(
@@ -165,6 +180,76 @@ def clean_yrke_kjonn(ctx: Context) -> Any:
         where value is not null
           and lower(contentscode) in ({_FILTER_KJONN})
         order by yrke, kjonn, variabel
+    """)
+
+
+@model(
+    name="clean.yrke_kjonn_kvartal",
+    deps=[f"raw:{RAW_KJONN_KVARTAL}"],
+    checks=[
+        "unique:yrke,kjonn,kvartal",
+        "kjonn in ('kvinner', 'menn')",
+        "lonnstakere >= 0",
+        "regexp_matches(kvartal, '^[0-9]{4}K[1-4]$')",
+    ],
+    doc="SSB 11658 delt på kjønn, hele kvartalsserien. Antall lønnstakere.",
+)
+def clean_yrke_kjonn_kvartal(ctx: Context) -> Any:
+    """Kjønnsdelingen kvartal for kvartal.
+
+    Samme utsnitt som ``clean.yrke_kjonn``, men over hele serien og bare med
+    bestanden. Medianlønn per kjønn er ikke med: den trengs bare i
+    øyeblikksbildet, og å ta den med hit ville doblet uttrekket uten at noe
+    leser det.
+    """
+    ctx.register("_kjonn_kv", jsonstat.to_frame(ctx.raw_latest(RAW_KJONN_KVARTAL)))
+    return ctx.sql("""
+        select
+            yrke                     as yrke,
+            lower(kjonn_label)       as kjonn,
+            tid                      as kvartal,
+            cast(value as bigint)    as lonnstakere
+        from _kjonn_kv
+        where value is not null
+          and lower(contentscode) = 'lonsstakere'
+        order by yrke, kjonn, kvartal
+    """)
+
+
+@model(
+    name="clean.yrke_trekk_kvartal",
+    deps=[f"raw:{RAW_TREKK_KVARTAL}"],
+    checks=[
+        "unique:yrke,variabel,kvartal",
+        f"variabel in ({_FILTER_TREKK})",
+        # Ikke `> 0`. Se docstringen: kilden skriver 0 der det ikke er noen
+        # å regne gjennomsnitt over.
+        "verdi >= 0",
+        "regexp_matches(kvartal, '^[0-9]{4}K[1-4]$')",
+    ],
+    doc="SSB 11658, gjennomsnittsalder og avtalt arbeidstid per yrke og kvartal.",
+)
+def clean_yrke_trekk_kvartal(ctx: Context) -> Any:
+    """Snittalder og avtalt arbeidstid over hele serien.
+
+    Den samme avveiningen som i ``clean.yrke_kjonn``, og med det samme
+    svaret. Begge variablene er gjennomsnitt over personer som *har* yrket,
+    og SSB skriver 0 der det ikke er noen igjen å regne over — 478 rader,
+    fordelt likt på de to variablene, og alle sammen i de ti yrkene som har
+    null lønnstakere i det kvartalet. En snittalder på null år er ikke en
+    alder. Men det er kildens tall, og å tolke det er mart-lagets jobb.
+    """
+    ctx.register("_trekk", jsonstat.to_frame(ctx.raw_latest(RAW_TREKK_KVARTAL)))
+    return ctx.sql(f"""
+        select
+            yrke                     as yrke,
+            tid                      as kvartal,
+            lower(contentscode)      as variabel,
+            cast(value as double)    as verdi
+        from _trekk
+        where value is not null
+          and lower(contentscode) in ({_FILTER_TREKK})
+        order by yrke, variabel, kvartal
     """)
 
 

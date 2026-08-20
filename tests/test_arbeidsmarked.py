@@ -8,6 +8,9 @@ tilfellene finnes én gang:
 * et yrke som er for lite i starten av perioden (5112),
 * et yrke i hovedgruppe 0, som ikke tåler en tidsserie (0000),
 * en medianlønn på 0, som er kildens måte å si «ingen å regne på» (5112),
+* en snittalder og en arbeidstid på 0, som betyr det samme (0000 i
+  startkvartalet),
+* en årlig serie som ikke rekker fram til siste årspunkt (sykefraværet),
 * en hovedgruppe tabellen ikke navngir, men KLASS gjør (0 og 1).
 """
 
@@ -46,13 +49,19 @@ BESTAND: dict[str, list[int]] = {
 
 # Siste kvartal: lønn, alder, arbeidstid. 5112 har medianlønn 0 — kildens
 # markering for at det ikke er noen å regne median for.
+#
+# Lønna er den samme som LONN_KVARTAL har i sluttkvartalet, og må være det:
+# hos SSB er de to uttrekkene den samme variabelen fra den samme tabellen,
+# og et oppdiktet univers der de spriker ville skjult at årstabellen og
+# øyeblikksbildet skal måle det samme. Sjekken står i
+# test_the_fixture_agrees_with_itself_about_the_last_wage.
 SISTE: dict[str, list[float]] = {
     #        lønn,   alder, arbeidstid
-    "0-9": [50_000, 42.0, 34.0],
-    "1111": [88_330, 47.5, 15.9],
-    "5111": [42_120, 38.2, 30.1],
+    "0-9": [60_000, 42.0, 34.0],
+    "1111": [80_000, 47.5, 15.9],
+    "5111": [50_000, 38.2, 30.1],
     "5112": [0, 44.5, 26.3],
-    "0000": [43_720, 41.0, 19.2],
+    "0000": [55_000, 41.0, 19.2],
 }
 
 # Kvinner og menn per yrke, siste kvartal. Summerer til bestanden.
@@ -69,6 +78,28 @@ LONN_KJONN: dict[str, tuple[float, float]] = {
     "5111": (41_000, 43_000),
     "5112": (0, 0),
     "0000": (42_000, 45_000),
+}
+
+# Kjønnsdelingen i begge kvartaler. Slutten er den samme som KJONN, så
+# øyeblikksbildet og årstabellen skal gi nøyaktig samme kvinneandel i det
+# siste punktet — det er en av sjekkene under.
+KJONN_KVARTAL: dict[str, list[tuple[int, int]]] = {
+    "0-9": [(5_000, 5_000), KJONN["0-9"]],
+    "1111": [(400, 600), KJONN["1111"]],
+    "5111": [(4_400, 3_600), KJONN["5111"]],
+    "5112": [(100, 300), KJONN["5112"]],
+    "0000": [(200, 400), KJONN["0000"]],
+}
+
+# Snittalder og avtalt arbeidstid i begge kvartaler, samme mønster. 0000 har
+# 0 i starten: kildens måte å si at det ikke er noen å regne gjennomsnitt
+# over, og det skal bli null i mart — ikke en snittalder på null år.
+TREKK_KVARTAL: dict[str, list[tuple[float, float]]] = {
+    "0-9": [(40.0, 35.0), (SISTE["0-9"][1], SISTE["0-9"][2])],
+    "1111": [(45.0, 16.5), (SISTE["1111"][1], SISTE["1111"][2])],
+    "5111": [(36.0, 31.5), (SISTE["5111"][1], SISTE["5111"][2])],
+    "5112": [(42.0, 27.0), (SISTE["5112"][1], SISTE["5112"][2])],
+    "0000": [(0.0, 0.0), (SISTE["0000"][1], SISTE["0000"][2])],
 }
 
 # Tre aldersbånd som summerer til bestanden.
@@ -103,12 +134,18 @@ KPI_SISTE_MAANED: int = 8
 KPI_START: float = 75.0
 KPI_SLUTT: float = 100.0
 
-# To år, så vi kan sjekke at mart tar det siste. 0000 mangler helt.
+# Tre år, så vi kan sjekke at mart tar det siste. 0000 mangler helt.
+#
+# 2016 er med og 2026 er ikke: sykefraværet er årlig og ligger etter
+# kvartalsstatistikken, akkurat som i den ekte kilden. Det gir en serie som
+# rekker fram til det første årspunktet og ikke lenger — og det er den
+# egenskapen tidslinja må kunne oppgi.
+SYKEFRAVAER_AAR: list[str] = ["2016", "2024", "2025"]
 SYKEFRAVAER: dict[str, dict[str, float]] = {
-    "0-9": {"2024": 5.0, "2025": 5.4},
-    "1111": {"2024": 2.0, "2025": 2.2},
-    "5111": {"2024": 6.0, "2025": 6.6},
-    "5112": {"2024": 4.0, "2025": 4.4},
+    "0-9": {"2016": 4.6, "2024": 5.0, "2025": 5.4},
+    "1111": {"2016": 1.8, "2024": 2.0, "2025": 2.2},
+    "5111": {"2016": 5.5, "2024": 6.0, "2025": 6.6},
+    "5112": {"2016": 3.7, "2024": 4.0, "2025": 4.4},
 }
 
 KLASS_KODER: list[dict[str, Any]] = [
@@ -221,7 +258,7 @@ def _alder_doc() -> dict[str, Any]:
 
 
 def _sykefravaer_doc() -> dict[str, Any]:
-    aar = ["2024", "2025"]
+    aar = SYKEFRAVAER_AAR
     verdier = [SYKEFRAVAER.get(y, {}).get(a) for y in YRKER for a in aar]
     return _doc(
         {
@@ -229,6 +266,40 @@ def _sykefravaer_doc() -> dict[str, Any]:
             "Yrke": _dim(YRKER, YRKESNAVN),
             "ContentsCode": _dim(["Sykefraversprosent"]),
             "Tid": _dim(aar),
+        },
+        verdier,
+    )
+
+
+def _kjonn_kvartal_doc() -> dict[str, Any]:
+    verdier: list[Any] = []
+    for i in (0, 1):  # kvinner, så menn
+        for y in YRKER:
+            verdier += [KJONN_KVARTAL[y][t][i] for t in range(len(KVARTAL))]
+    return _doc(
+        {
+            "Kjonn": _dim(["2", "1"], {"2": "Kvinner", "1": "Menn"}),
+            "Alder": _dim(["999D"], {"999D": "Alle aldre"}),
+            "Yrke": _dim(YRKER, YRKESNAVN),
+            "ContentsCode": _dim(["Lonsstakere"]),
+            "Tid": _dim(KVARTAL),
+        },
+        verdier,
+    )
+
+
+def _trekk_kvartal_doc() -> dict[str, Any]:
+    verdier: list[Any] = []
+    for y in YRKER:
+        for i in (0, 1):  # GjsnAlder, så GjAvtArbtid
+            verdier += [TREKK_KVARTAL[y][t][i] for t in range(len(KVARTAL))]
+    return _doc(
+        {
+            "Kjonn": _dim(["0"], {"0": "Begge kjønn"}),
+            "Alder": _dim(["999D"], {"999D": "Alle aldre"}),
+            "Yrke": _dim(YRKER, YRKESNAVN),
+            "ContentsCode": _dim(["GjsnAlder", "GjAvtArbtid"]),
+            "Tid": _dim(KVARTAL),
         },
         verdier,
     )
@@ -282,6 +353,8 @@ def _skriv_raa() -> None:
         ("11658_siste", _siste_doc()),
         ("11658_kjonn", _kjonn_doc()),
         ("11658_alder", _alder_doc()),
+        ("11658_kjonn_kvartal", _kjonn_kvartal_doc()),
+        ("11658_trekk_kvartal", _trekk_kvartal_doc()),
         ("14789_sykefravaer", _sykefravaer_doc()),
     ):
         io.write_raw("ssb", dataset, json.dumps(doc).encode("utf-8"), {"license": "test"})
@@ -299,6 +372,7 @@ def built(project) -> dict[str, registry.BuildResult]:
     _skriv_raa()
     targets = [
         "mart.arbeidsmarked_yrke",
+        "mart.arbeidsmarked_yrke_aar",
         "mart.arbeidsmarked_hovedgruppe_kvartal",
         "mart.arbeidsmarked_reallonn_gruppe",
     ]
@@ -319,6 +393,8 @@ def test_build_covers_the_whole_chain(built: dict[str, registry.BuildResult]) ->
         "clean.yrke_kvartal",
         "clean.yrke_siste",
         "clean.yrke_kjonn",
+        "clean.yrke_kjonn_kvartal",
+        "clean.yrke_trekk_kvartal",
         "clean.yrke_alder",
         "clean.yrke_sykefravaer",
         "clean.yrke_lonn_kvartal",
@@ -326,6 +402,7 @@ def test_build_covers_the_whole_chain(built: dict[str, registry.BuildResult]) ->
         "mart.konsumpris_kvartal",
         "mart.arbeidsmarked_lonn_kvartal",
         "mart.arbeidsmarked_yrke",
+        "mart.arbeidsmarked_yrke_aar",
         "mart.arbeidsmarked_hovedgruppe_kvartal",
         "mart.arbeidsmarked_reallonn_gruppe",
     }
@@ -613,3 +690,182 @@ def test_an_empty_model_cannot_pass_its_checks(project) -> None:
     run_checks(con, "tom", path, ["not_null:a", "a > 0"])
     with pytest.raises(CheckFailed, match="0 rader"):
         run_checks(con, "tom", path, ["min_rows:1"])
+
+
+# --------------------------------------------------------------------------
+# mart.arbeidsmarked_yrke_aar — grunnlaget for tidslinja
+# --------------------------------------------------------------------------
+def _aar(built: dict[str, registry.BuildResult], kode: str, aar: int) -> dict[str, Any]:
+    df = io.load("mart.arbeidsmarked_yrke_aar")
+    return df.filter((pl.col("yrke") == kode) & (pl.col("aar") == aar)).row(0, named=True)
+
+
+def test_the_year_table_has_one_row_per_occupation_and_point(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    df = io.load("mart.arbeidsmarked_yrke_aar")
+    assert df.height == len(FIRESIDE) * len(KVARTAL)
+    assert sorted(df["aar"].unique().to_list()) == [int(k[:4]) for k in KVARTAL]
+    # Totalkoden hører ikke hjemme her, like lite som i øyeblikksbildet.
+    assert set(df["yrke"].to_list()) == set(FIRESIDE)
+
+
+def test_every_year_point_sits_in_the_same_quarter(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    """Ellers måler en endring over serien delvis sesongsvingningen."""
+    df = io.load("mart.arbeidsmarked_yrke_aar")
+    kvartalsnr = {k[4:] for k in df["kvartal"].to_list()}
+    assert kvartalsnr == {KVARTAL[-1][4:]}
+
+
+def test_the_last_year_point_equals_the_snapshot(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    """Årstabellen og øyeblikksbildet måler det samme i det siste punktet.
+
+    De kommer fra hver sine uttrekk — det ene over hele serien, det andre
+    bare siste kvartal — og hvis de spriker, er ett av dem koblet på feil
+    kvartal. Da ville figuren skiftet tall i det leseren rørte tidslinja.
+    """
+    siste = int(KVARTAL[-1][:4])
+    for kode in FIRESIDE:
+        snitt = _yrke(built, kode)
+        punkt = _aar(built, kode, siste)
+        assert punkt["lonnstakere"] == snitt["lonnstakere"]
+        assert punkt["kvinneandel"] == snitt["kvinneandel"]
+        assert punkt["median_lonn"] == snitt["median_lonn"]
+        assert punkt["gjennomsnittsalder"] == snitt["gjennomsnittsalder"]
+        assert punkt["avtalt_arbeidstid"] == snitt["avtalt_arbeidstid"]
+
+
+def test_the_first_year_point_equals_the_snapshots_starting_stock(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    """Endringslaget skal gi nøyaktig den veksten saken selv oppgir."""
+    forste = int(KVARTAL[0][:4])
+    for kode in FIRESIDE:
+        assert _aar(built, kode, forste)["lonnstakere"] == _yrke(built, kode)["lonnstakere_start"]
+
+
+def test_a_zero_average_is_not_a_measurement(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    """Kildens 0 betyr «ingen å regne over», og skal bli null her.
+
+    Uten dette havner yrket på det laveste trinnet i figuren — farget som
+    «under 38 år», som om noen hadde talt.
+    """
+    raa = io.load("clean.yrke_trekk_kvartal").filter(
+        (pl.col("yrke") == "0000") & (pl.col("kvartal") == KVARTAL[0])
+    )
+    assert sorted(raa["verdi"].to_list()) == [0.0, 0.0]
+
+    punkt = _aar(built, "0000", int(KVARTAL[0][:4]))
+    assert punkt["gjennomsnittsalder"] is None
+    assert punkt["avtalt_arbeidstid"] is None
+    # Og det samme i øyeblikksbildet, der kilden skriver 0.
+    assert _yrke(built, "5112")["median_lonn"] is None
+
+
+def test_sick_leave_does_not_reach_the_last_year_point(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    """Sykefraværet er årlig og ligger etter. Hullet skal bli stående.
+
+    Å fylle det med fjorårets tall ville gjort en manglende måling til et
+    datapunkt. Tidslinja oppgir i stedet hvor langt laget rekker.
+    """
+    df = io.load("mart.arbeidsmarked_yrke_aar")
+    siste = int(KVARTAL[-1][:4])
+    assert df.filter(pl.col("aar") == siste)["sykefravaer_pst"].null_count() == len(FIRESIDE)
+
+    forste = int(KVARTAL[0][:4])
+    assert _aar(built, "5111", forste)["sykefravaer_pst"] == SYKEFRAVAER["5111"]["2016"]
+    # 0000 mangler i hele serien, og skal fortsatt mangle.
+    assert _aar(built, "0000", forste)["sykefravaer_pst"] is None
+
+
+def test_the_sexes_split_the_stock_in_every_point(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    """Sjekken som fanger en kjønnsserie koblet på feil kvartal."""
+    df = io.load("mart.arbeidsmarked_yrke_aar")
+    skjeve = df.filter(
+        pl.col("kvinner").fill_null(0) + pl.col("menn").fill_null(0) != pl.col("lonnstakere")
+    )
+    assert skjeve.height == 0
+    forste = _aar(built, "5111", int(KVARTAL[0][:4]))
+    assert forste["kvinneandel"] == KJONN_KVARTAL["5111"][0][0] / BESTAND["5111"][0]
+
+
+# --------------------------------------------------------------------------
+# Tidslinja i sakspakken
+# --------------------------------------------------------------------------
+def test_declared_formats_match_the_packages_own_number_writing() -> None:
+    """Lagenes format må skrive tallene som resten av sakspakken gjør.
+
+    Formatene er en påstand om at sida og PNG-en sier det samme. Prøves den
+    ikke, driver de fra hverandre uten at noe feiler — det var nettopp slik
+    sykefraværet endte med å bli ganget med hundre én gang for mye.
+
+    Halve siste siffer er ikke med: Python runder til nærmeste like tall,
+    nettleserens Intl runder bort fra null, og 12,35 blir «12,3» i den ene
+    og «12,4» i den andre. Ekte målinger har ikke flere desimaler enn dette
+    uansett, og forskjellen er ett siffer i det minste sifferet.
+    """
+    from examples.arbeidsmarked_yrke import (
+        FMT_AAR,
+        FMT_ANDEL,
+        FMT_ANTALL,
+        FMT_ENDRING,
+        FMT_KR,
+        FMT_PROSENT,
+        FMT_TIMER,
+        _aar as _aar_tekst,
+        _andel,
+        _antall,
+        _fravaer,
+        _kr,
+        _pst,
+        _skriv,
+        _timer,
+    )
+
+    par = (
+        (FMT_KR, _kr, (42_120.0, 29_000.0, 75_500.0)),
+        (FMT_ANTALL, _antall, (170_281.0, 500.0, 7.0)),
+        (FMT_ENDRING, _pst, (0.0243452, -0.0589, 0.0, -0.00004, 0.2537)),
+        (FMT_ANDEL, _andel, (0.60719, 0.0, 1.0)),
+        (FMT_AAR, _aar_tekst, (35.8, 48.0)),
+        (FMT_PROSENT, _fravaer, (5.6, 2.2)),
+        (FMT_TIMER, _timer, (17.3, 37.5)),
+    )
+    for fmt, skriver, verdier in par:
+        for verdi in verdier:
+            assert _skriv(fmt, verdi) == skriver(verdi), (fmt, verdi)
+
+
+def test_every_layer_declares_a_rule_a_scale_and_a_word_for_missing() -> None:
+    """Uten alle tre kan ikke sida farge en flis den ikke har svaret på."""
+    from statman.publish.article import RULES
+    from examples.arbeidsmarked_yrke import LAG
+
+    for lag in LAG:
+        assert lag.regel in RULES, lag.key
+        # Fem trinn krever fire grenser. Er de ute av takt, viser figuren
+        # og tegnforklaringen hver sin inndeling.
+        assert len(lag.grenser) == len(lag.roller) - 1, lag.key
+        assert len(lag.tekster) == len(lag.roller), lag.key
+        assert list(lag.grenser) == sorted(lag.grenser), lag.key
+        assert lag.mangler_ord, lag.key
+        # En nedre grense uten et ord for å ligge under den er en skravur
+        # uten forklaring.
+        assert (lag.gulv is None) == (not lag.under_ord), lag.key
+        assert (lag.gulv is None) or lag.regel == "change", lag.key
+
+
+def test_the_fixture_agrees_with_itself_about_the_last_wage() -> None:
+    """De to lønnsuttrekkene er én variabel hos kilden, og må være det her."""
+    for kode in YRKER:
+        assert SISTE[kode][0] == LONN_KVARTAL[kode][-1], kode

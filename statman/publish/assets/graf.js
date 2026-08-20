@@ -42,6 +42,13 @@
   function tall(v, standard) { return typeof v === "number" ? v : standard; }
 
   function normaliser(spek) {
+    function format(f) {
+      if (!f) return null;
+      return {
+        decimals: tall(f.decimals, 0), factor: tall(f.factor, 1),
+        suffix: f.suffix || "", sign: !!f.sign
+      };
+    }
     function akse(a) {
       if (!a) return null;
       return {
@@ -60,7 +67,8 @@
         values: m.values || [], segments: m.segments || [],
         note: m.note || "", pin: !!m.pin,
         tones: m.tones || [],
-        points: m.points || [], point_labels: m.point_labels || []
+        points: m.points || [], point_labels: m.point_labels || [],
+        series: m.series || []
       };
     });
     spek.guides = (spek.guides || []).map(function (g) {
@@ -70,10 +78,28 @@
     spek.layers = (spek.layers || []).map(function (l) {
       return {
         key: l.key || "", label: l.label || "",
-        legend: l.legend || [], caption: l.caption || ""
+        legend: l.legend || [], caption: l.caption || "",
+        // Feltene under styrer tidslinja. De er analysens regel, ikke
+        // rendererens: grensene, ordene og presisjonen står i sakspakken.
+        rule: l.rule || "",
+        edges: l.edges || [],
+        format: format(l.format),
+        level_label: l.level_label || "",
+        level_format: format(l.level_format),
+        floor: typeof l.floor === "number" ? l.floor : null,
+        span: l.span || [],
+        missing_label: l.missing_label || "",
+        floor_label: l.floor_label || ""
       };
     });
     spek.layer_label = spek.layer_label || "";
+    spek.timeline = spek.timeline ? {
+      labels: spek.timeline.labels || [],
+      label: spek.timeline.label || "",
+      note: spek.timeline.note || "",
+      from_point: tall(spek.timeline.from_point, 0),
+      to_point: tall(spek.timeline.to_point, 0)
+    } : null;
     return spek;
   }
 
@@ -178,6 +204,332 @@
       if (erBeroring(ev)) return;
       handler(ev);
     });
+  }
+
+  /* ================================================================ TIDSLINJE */
+  // Her, og bare her, regner fila ut noe annet enn en piksel.
+  //
+  // Grunnen er at svaret ikke finnes på forhånd. Med elleve punkter er det
+  // 55 fra/til-kombinasjoner per lag, og analysen kan ikke skrive ut en
+  // ferdig farge og en ferdig setning for hver av dem uten at
+  // spesifikasjonen blir en oppslagstabell på flere hundre kilobyte.
+  //
+  // Så analysen sier regelen i stedet for svaret: hvilken serie som måles,
+  // om det er nivået eller endringen, hvor grensene mellom trinnene går,
+  // hvor lite et yrke kan være før en prosent slutter å bety noe, hvor
+  // mange desimaler tallet tåler, og hva som skal stå når målingen mangler.
+  // Ingenting av det velges her. Det som skjer her er en divisjon, en
+  // sammenligning og en avrunding.
+
+  // Laget rekker ikke nødvendigvis like langt som skinna — sykefraværet er
+  // årlig og ligger et år etter bestanden. Stillingen klemmes inn i
+  // rekkevidden når den leses, og den globale stillingen røres ikke: bytter
+  // leseren tilbake til et lag som rekker lenger, står håndtaket der hen
+  // satte det.
+  function klem(lag, i) {
+    if (!lag.span || lag.span.length !== 2) return i;
+    return Math.max(lag.span[0], Math.min(lag.span[1], i));
+  }
+
+  // Måling eller mangel, med grunnen til mangelen. De to grunnene er ikke
+  // det samme: «ikke publisert» er kilden som tier, «ikke sammenlignbar» er
+  // vi som lar være å regne. Ordene for begge kommer fra laget.
+  function maaling(lag, mark, li, fra, til) {
+    var s = mark.series[li];
+    if (!s || !s.length) return { v: null, ord: lag.floor_label || lag.missing_label };
+    var b = s[klem(lag, til)];
+    if (b === null || b === undefined) return { v: null, ord: lag.missing_label };
+    if (lag.rule !== "change") return { v: b, ord: "" };
+
+    var a = s[klem(lag, fra)];
+    if (a === null || a === undefined) return { v: null, ord: lag.missing_label };
+    // En endring fra ingenting er ikke en prosent, uansett hvor mange som kom til.
+    if (!(a > 0)) return { v: null, ord: lag.floor_label || lag.missing_label };
+    // Grensen prøves mot begge endene: hvilke yrker som er små endrer seg.
+    if (lag.floor !== null && (a < lag.floor || b < lag.floor)) {
+      return { v: null, ord: lag.floor_label };
+    }
+    return { v: b / a - 1, ord: "" };
+  }
+
+  // Nivået i det ene punktet, uavhengig av om laget måler nivå eller endring.
+  // Et endringslag som oppgir level_label viser begge deler i boblen.
+  function nivaa(lag, mark, li, til) {
+    var s = mark.series[li];
+    if (!s || !s.length) return null;
+    var v = s[klem(lag, til)];
+    return (v === null || v === undefined) ? null : v;
+  }
+
+  // Trinnet en verdi havner på. Samme regning som analysen gjør for PNG-en:
+  // første trinn der verdien er mindre enn grensen.
+  function trinn(lag, v) {
+    if (v === null) return "mangler";
+    var i = 0;
+    while (i < lag.edges.length && v >= lag.edges[i]) i++;
+    return lag.legend[i] ? lag.legend[i][0] : "mangler";
+  }
+
+  // Tallet skrevet slik laget ba om det. Mellomrommet mellom tusenene er
+  // hardt, så «170 281» ikke brekker over to linjer midt i tallet.
+  var formatterere = {};
+  function formater(f, v) {
+    if (!f || v === null) return "";
+    var nokkel = f.decimals + "|" + f.factor;
+    if (!formatterere[nokkel]) {
+      formatterere[nokkel] = new Intl.NumberFormat("nb-NO", {
+        minimumFractionDigits: f.decimals, maximumFractionDigits: f.decimals
+      });
+    }
+    var x = v * f.factor;
+    // To rettelser på det nb-NO gir oss, og begge handler om at sida skal
+    // skrive tall på én måte og ikke to. Skilletegnet mellom tusenene blir
+    // et hardt mellomrom, så «170 281» ikke brekker midt i tallet. Og
+    // minustegnet blir bindestreken analysen bruker: U+2212 er penere, men
+    // da står PNG-en og boblen med hvert sitt minus for det samme tallet.
+    var s = formatterere[nokkel].format(x)
+      .replace(/\s/g, " ")
+      .replace(/−/g, "-");
+    // Fortegnet settes på alt som ikke allerede har ett. Det er den samme
+    // regelen som Pythons «+»-format, og den er valgt fordi det er den
+    // resten av sakspakken bruker — ikke fordi «+0,0 %» er pent.
+    if (f.sign && s.charAt(0) !== "-") s = "+" + s;
+    return s + f.suffix;
+  }
+
+  // Det boblen viser når tidslinja styrer: hvert lag med sin verdi i det
+  // punktet leseren står på. Uten dette ville boblen vist siste kvartal mens
+  // flaten var farget etter 2018.
+  function tidsavlesninger(spek, mark, fra, til) {
+    var ut = [];
+    spek.layers.forEach(function (lag, li) {
+      if (lag.level_label && lag.level_format) {
+        var n = nivaa(lag, mark, li, til);
+        ut.push({
+          label: lag.level_label,
+          value: n === null ? lag.missing_label : formater(lag.level_format, n)
+        });
+      }
+      var m = maaling(lag, mark, li, fra, til);
+      ut.push({
+        label: lag.label,
+        value: m.v === null ? m.ord : formater(lag.format, m.v),
+        // Nøkkelfargen i boblen er den flisa faktisk har i det laget. Da
+        // slipper leseren å bytte lag for å se hvor et tall ligger på skalaen.
+        tone: m.v === null ? "" : trinn(lag, m.v)
+      });
+    });
+    return ut;
+  }
+
+  /* ------------------------------------------------------------ selve skinna */
+  // Bygget av vanlige elementer og ikke av SVG: dette er en betjening, ikke
+  // en figur. Håndtakene er knapper med role="slider", så piltastene virker
+  // uten at vi finner opp tastaturet på nytt.
+  //
+  // Bare endene av skinna er navngitt, og lesningen står over håndtakene.
+  // Elleve årstall langs skinna kolliderer med hverandre på en smal skjerm,
+  // og en etikett som overlapper naboetiketten er verre enn ingen.
+  function lagTidslinje(spek, ved) {
+    var tid = spek.timeline, n = tid.labels.length;
+    var stand = { fra: tid.from_point, til: tid.to_point, lag: spek.layers[0] };
+
+    var felt = document.createElement("div");
+    felt.className = "graf-tid";
+    if (tid.label) felt.appendChild(txt(document.createElement("label"), tid.label));
+
+    var skinne = document.createElement("div");
+    skinne.className = "graf-skinne";
+    felt.appendChild(skinne);
+
+    var lesning = document.createElement("span");
+    lesning.className = "graf-lesning";
+    skinne.appendChild(lesning);
+
+    var spor = document.createElement("span");
+    spor.className = "graf-spor";
+    skinne.appendChild(spor);
+
+    // Den delen av skinna laget ikke rekker over. Vises bare når det er en.
+    var ute = document.createElement("span");
+    ute.className = "graf-spor-ute";
+    skinne.appendChild(ute);
+
+    var valgt = document.createElement("span");
+    valgt.className = "graf-spor-valgt";
+    skinne.appendChild(valgt);
+
+    function pst(i) { return n < 2 ? 0 : (i / (n - 1)) * 100; }
+
+    for (var i = 0; i < n; i++) {
+      var t = document.createElement("span");
+      t.className = "graf-tikk";
+      t.style.left = pst(i) + "%";
+      skinne.appendChild(t);
+    }
+    var ende0 = txt(document.createElement("span"), tid.labels[0]);
+    ende0.className = "graf-ende start";
+    var ende1 = txt(document.createElement("span"), tid.labels[n - 1]);
+    ende1.className = "graf-ende slutt";
+    skinne.appendChild(ende0);
+    skinne.appendChild(ende1);
+
+    function haandtak(rolle) {
+      var h = document.createElement("button");
+      h.type = "button";
+      h.className = "graf-haandtak " + rolle;
+      h.setAttribute("role", "slider");
+      h.setAttribute("aria-valuemin", 0);
+      h.setAttribute("aria-valuemax", n - 1);
+      skinne.appendChild(h);
+      return h;
+    }
+    var hFra = haandtak("fra"), hTil = haandtak("til");
+
+    // Hvilke stillinger som er lovlige i det aktive laget.
+    function grenser() {
+      var lag = stand.lag;
+      if (lag && lag.span && lag.span.length === 2) return [lag.span[0], lag.span[1]];
+      return [0, n - 1];
+    }
+    function endring() { return !!stand.lag && stand.lag.rule === "change"; }
+    function kl(i, g) { return Math.max(g[0], Math.min(g[1], i)); }
+
+    // Stillingen slik det aktive laget kan bruke den. `stand` røres ikke:
+    // et lag som rekker kortere enn skinna skal ikke stjele stillingen
+    // leseren satte i et lag som rekker lenger.
+    function normalisert() {
+      var g = grenser(), fra = kl(stand.fra, g), til = kl(stand.til, g);
+      if (!endring()) return { fra: fra, til: til };
+      // En periode med null lengde er ikke en periode. Uten dette kan
+      // leseren stille inn 2026–2026 og få «omtrent uendret» på hvert
+      // eneste yrke — et svar som ser ut som et funn.
+      if (fra >= til) {
+        if (til > g[0]) fra = til - 1;
+        else { fra = g[0]; til = Math.min(g[1], g[0] + 1); }
+      }
+      return { fra: fra, til: til };
+    }
+
+    function tegn() {
+      var g = grenser(), na = normalisert();
+      var fra = na.fra, til = na.til, to = endring();
+
+      hFra.hidden = !to;
+      hFra.style.left = pst(fra) + "%";
+      hTil.style.left = pst(til) + "%";
+      hFra.setAttribute("aria-valuenow", fra);
+      hTil.setAttribute("aria-valuenow", til);
+      hFra.setAttribute("aria-valuetext", tid.labels[fra]);
+      hTil.setAttribute("aria-valuetext", tid.labels[til]);
+      hFra.setAttribute("aria-label", (tid.label || "Tidspunkt") + ", fra");
+      hTil.setAttribute("aria-label", (tid.label || "Tidspunkt") + (to ? ", til" : ""));
+
+      // Det fylte spennet står bare i et endringslag. Et tidspunkt er ikke
+      // et spenn, og en fylt strekning fra skinnestart fram til håndtaket
+      // ville sagt «fram til 2019» om noe som gjelder 2019.
+      var a = pst(fra), b = pst(til);
+      valgt.hidden = !to;
+      valgt.style.left = a + "%";
+      valgt.style.width = Math.max(0, b - a) + "%";
+
+      var utenfor = g[1] < n - 1;
+      ute.hidden = !utenfor;
+      if (utenfor) {
+        ute.style.left = pst(g[1]) + "%";
+        ute.style.width = (100 - pst(g[1])) + "%";
+      }
+
+      var ord = to ? tid.labels[fra] + "–" + tid.labels[til] : tid.labels[til];
+      txt(lesning, ord);
+      // Lesningen står midt over spennet, eller rett over håndtaket når det
+      // bare er ett.
+      lesning.style.left = (to ? (a + b) / 2 : b) + "%";
+
+      ved(fra, til, ord);
+    }
+
+    // Håndtakene kan ikke krysse hverandre, og i et endringslag kan de
+    // heller ikke møtes.
+    function sett(hvem, i) {
+      var g = grenser(), na = normalisert();
+      i = kl(Math.round(i), g);
+      if (hvem === "fra") stand.fra = endring() ? Math.min(i, na.til - 1) : i;
+      else stand.til = endring() ? Math.max(i, na.fra + 1) : i;
+      tegn();
+    }
+
+    function indeksVed(klientX) {
+      var r = skinne.getBoundingClientRect();
+      if (r.width <= 0) return 0;
+      return ((klientX - r.left) / r.width) * (n - 1);
+    }
+
+    [["fra", hFra], ["til", hTil]].forEach(function (par) {
+      var hvem = par[0], h = par[1];
+      var drar = false;
+      h.addEventListener("pointerdown", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        h.focus();
+        drar = true;
+        h.classList.add("drar");
+        // Fangsten er det som gjør at draget følger med når pekeren går
+        // utenfor de femten pikslene håndtaket er. Den er en forbedring og
+        // ikke en forutsetning: mislykkes den, drar `drar` lasset videre.
+        try { h.setPointerCapture(ev.pointerId); } catch (e) { /* uten fangst, fortsatt drag */ }
+      });
+      h.addEventListener("pointermove", function (ev) {
+        if (!drar) return;
+        sett(hvem, indeksVed(ev.clientX));
+      });
+      function slipp(ev) {
+        drar = false;
+        try {
+          if (h.hasPointerCapture(ev.pointerId)) h.releasePointerCapture(ev.pointerId);
+        } catch (e) { /* var aldri fanget */ }
+        h.classList.remove("drar");
+      }
+      h.addEventListener("pointerup", slipp);
+      h.addEventListener("pointercancel", slipp);
+      h.addEventListener("keydown", function (ev) {
+        var na = hvem === "fra" ? stand.fra : stand.til, g = grenser(), steg = null;
+        if (ev.key === "ArrowLeft" || ev.key === "ArrowDown") steg = na - 1;
+        else if (ev.key === "ArrowRight" || ev.key === "ArrowUp") steg = na + 1;
+        else if (ev.key === "PageDown") steg = na - 5;
+        else if (ev.key === "PageUp") steg = na + 5;
+        else if (ev.key === "Home") steg = g[0];
+        else if (ev.key === "End") steg = g[1];
+        if (steg === null) return;
+        ev.preventDefault();
+        sett(hvem, steg);
+      });
+    });
+
+    // Klikk på skinna flytter det nærmeste håndtaket dit. Uten dette må
+    // leseren treffe en sirkel på fjorten piksler for å komme i gang.
+    skinne.addEventListener("pointerdown", function (ev) {
+      var i = indeksVed(ev.clientX);
+      var hvem = endring() && Math.abs(i - stand.fra) < Math.abs(i - stand.til) ? "fra" : "til";
+      (hvem === "fra" ? hFra : hTil).focus();
+      sett(hvem, i);
+    });
+
+    if (tid.note) {
+      var note = txt(document.createElement("p"), tid.note);
+      note.className = "graf-tid-note";
+      felt.appendChild(note);
+    }
+
+    // Lagvelgeren kaller denne når leseren bytter lag: rekkevidden og
+    // antallet håndtak følger laget, stillingen følger leseren.
+    felt._settLag = function (lag) { stand.lag = lag; tegn(); };
+    felt._nullstill = function () {
+      stand.fra = tid.from_point;
+      stand.til = tid.to_point;
+      tegn();
+    };
+    return felt;
   }
 
   /* ----------------------------------------------------- markeringsgrupper */
@@ -954,11 +1306,22 @@
       return treff;
     }
 
+    // Med tidslinje er ikke merkets faste avlesninger sanne lenger — de
+    // gjelder siste punkt, og leseren kan stå hvor som helst. Da bygges
+    // boblen av lagene i stedet, i den stillingen håndtakene faktisk står.
+    function peket(m) {
+      if (!spek.timeline) return m;
+      return {
+        label: m.label, group: m.group,
+        values: tidsavlesninger(spek, m, stilling.fra, stilling.til)
+      };
+    }
+
     function visVed(ev) {
       var m = ved(ev);
       if (!m) { visBoble(boble, vert, null); return null; }
       var r = s.getBoundingClientRect(), k = r.width / B;
-      visBoble(boble, vert, m, r.left + (m._x + m._b / 2) * k, r.top + m._y * k);
+      visBoble(boble, vert, peket(m), r.left + (m._x + m._b / 2) * k, r.top + m._y * k);
       return m;
     }
     paaPeker(flate, visVed);
@@ -971,12 +1334,29 @@
       velg(g, m && m.label !== g.valgt ? m.label : null);
     });
 
-    // Lagbytte er bare en ny fylling per flis. Layouten ligger fast, så
-    // leseren kan følge én flis gjennom alle lagene.
-    s._settLag = function (i) {
+    // Lagbytte er bare en ny fylling per flis. Layouten ligger fast — den
+    // følger bestanden i siste punkt og rører seg ikke når leseren drar i
+    // tidslinja. Det er et valg: en flate som puster med tida ville vært
+    // vakrere å se på, men da kan man ikke følge én flis gjennom hverken
+    // lagene eller årene, og det er nettopp det figuren er til for.
+    var stilling = { lag: 0, fra: 0, til: 0 };
+    if (spek.timeline) {
+      stilling.fra = spek.timeline.from_point;
+      stilling.til = spek.timeline.to_point;
+    }
+
+    s._settLag = function (i, fra, til) {
+      stilling.lag = i;
+      if (fra !== undefined) { stilling.fra = fra; stilling.til = til; }
+      var lag = spek.layers[i];
       spek.marks.forEach(function (m) {
         if (!m._el) return;
-        var tone = spek.layers.length ? (m.tones[i] || "mangler") : m.tone;
+        var tone;
+        if (spek.timeline && lag) {
+          tone = trinn(lag, maaling(lag, m, i, stilling.fra, stilling.til).v);
+        } else {
+          tone = spek.layers.length ? (m.tones[i] || "mangler") : m.tone;
+        }
         m._el.setAttribute("fill", flatefyll(tone));
       });
     };
@@ -1036,7 +1416,7 @@
   // Lagknappene, når figuren kan farges på flere måter. Knapper og ikke et
   // nedtrekk: lagene er få, og poenget er å bla mellom dem og se den samme
   // flaten skifte betydning.
-  function lagLagvelger(spek, svg, tegn, tekst) {
+  function lagLagvelger(spek, bytt) {
     var felt = document.createElement("div");
     var etikett = document.createElement("label");
     felt.appendChild(txt(etikett, spek.layer_label || "Farg etter"));
@@ -1048,11 +1428,8 @@
     var knapper = [];
 
     function vis(i) {
-      svg._settLag(i);
       knapper.forEach(function (k, j) { k.setAttribute("aria-pressed", j === i ? "true" : "false"); });
-      if (tegn) fyllTegn(tegn, spek.layers[i].legend);
-      if (tekst) txt(tekst, spek.layers[i].caption);
-      svg.setAttribute("aria-label", spek.alt + " Farget etter: " + spek.layers[i].label + ".");
+      bytt(i);
     }
 
     spek.layers.forEach(function (l, i) {
@@ -1073,8 +1450,40 @@
     var boks = document.createElement("div");
     boks.className = "graf-styring " + (spek.width === "full" ? "full" : "bred");
 
-    if (spek.layers.length && svg && svg._settLag) {
-      boks.appendChild(lagLagvelger(spek, svg, tegn, tekst));
+    // Lagvelgeren og tidslinja styrer den samme figuren, og må derfor dele
+    // hvilket lag som er aktivt. Panelet eier den tilstanden; ingen av de
+    // to holder sin egen kopi av den.
+    var kanLag = spek.layers.length && svg && svg._settLag;
+    var aktivt = 0, lesning = "", tidslinje = null;
+
+    function oppdater(fra, til) {
+      svg._settLag(aktivt, fra, til);
+      // Blindeteksten skal si det samme som figuren viser — hvilket lag, og
+      // hvilket tidspunkt leseren står på.
+      svg.setAttribute("aria-label",
+        spek.alt + " Farget etter: " + spek.layers[aktivt].label +
+        (lesning ? ". Tidspunkt: " + lesning : "") + ".");
+    }
+
+    function bytt(i) {
+      aktivt = i;
+      if (tegn) fyllTegn(tegn, spek.layers[i].legend);
+      if (tekst) txt(tekst, spek.layers[i].caption);
+      // Tidslinja tegner seg selv på nytt og kaller oppdater den veien, så
+      // rekkevidde og figur aldri kan komme i utakt.
+      if (tidslinje) tidslinje._settLag(spek.layers[i]);
+      else oppdater();
+    }
+
+    if (kanLag && spek.timeline) {
+      tidslinje = lagTidslinje(spek, function (fra, til, tekstlesning) {
+        lesning = tekstlesning;
+        oppdater(fra, til);
+      });
+    }
+    if (kanLag) {
+      boks.appendChild(lagLagvelger(spek, bytt));
+      if (tidslinje) boks.appendChild(tidslinje);
     }
     if (!spek.picker) return boks;
 
@@ -1144,6 +1553,7 @@
     boks.appendChild(txt(nullstill, "Nullstill"));
     nullstill.addEventListener("click", function () {
       g.valgt = null; g.filter = ""; meld(g);
+      if (tidslinje) tidslinje._nullstill();
     });
 
     velger.addEventListener("change", function () { velg(g, velger.value); });

@@ -10,17 +10,19 @@ Ekte tall fra SSB, hele veien fra API-kall til sakspakke. Kjeden er:
       -> output/arbeidsmarked_yrke/     (sakspakke)
       -> statman publish arbeidsmarked_yrke  -> docs/   (artikkel)
 
-Saken er en flisefigur over 407 yrker, med seks lag å farge den etter.
-Forbildet er Andrej Karpathys `karpathy.ai/jobs`, som gjør det samme for
-USA — men der fire lag er BLS' *framskrivinger* og en språkmodells anslag
-på hvor utsatt yrket er for KI, er alle seks lagene her målt. Det er ikke
-en dyd i seg selv; det er bare det norske datagrunnlaget som tillater det.
-SSB publiserer lønnstakere per fireside yrke hvert kvartal tilbake til
-2016, og da trenger man ikke gjette hva teknologien vil gjøre med yrkene.
-Man kan se hva den allerede gjorde.
+Saken er en flisefigur over 407 yrker, med sju lag å farge den etter og en
+tidslinje å dra i. Forbildet er Andrej Karpathys `karpathy.ai/jobs`, som
+gjør det samme for USA — men der fire lag er BLS' *framskrivinger* og en
+språkmodells anslag på hvor utsatt yrket er for KI, er alle sju lagene her
+målt. Det er ikke en dyd i seg selv; det er bare det norske datagrunnlaget
+som tillater det. SSB publiserer lønnstakere per fireside yrke hvert kvartal
+tilbake til 2016, og da trenger man ikke gjette hva teknologien vil gjøre med
+yrkene. Man kan se hva den allerede gjorde — og med tidslinja kan leseren se
+det år for år i stedet for å få perioden servert.
 
 Det egentlige arbeidet her er ikke flisene. Det er å vite hvilke yrker man
-*ikke* kan regne tiårsvekst for — se ``statman/models/mart_arbeidsmarked.py``.
+*ikke* kan regne vekst for, og hvilke tidsutsnitt som i det hele tatt er
+sammenlignbare — se ``statman/models/mart_arbeidsmarked.py``.
 
 Kjør:  uv run statman example arbeidsmarked
 """
@@ -43,12 +45,15 @@ from statman.models.clean_ssb_kpi import RAW_KPI, TOTALINDEKS  # noqa: E402
 from statman.models.clean_ssb_yrke import (  # noqa: E402
     RAW_ALDER,
     RAW_KJONN,
+    RAW_KJONN_KVARTAL,
     RAW_KVARTAL,
     RAW_LONN_KVARTAL,
     RAW_SISTE,
     RAW_SYKEFRAVAER,
+    RAW_TREKK_KVARTAL,
     VARIABLER,
     VARIABLER_KJONN,
+    VARIABLER_TREKK,
 )
 from statman.models.clean_styrk import RAW_STYRK  # noqa: E402
 from statman.models.mart_arbeidsmarked import (  # noqa: E402
@@ -69,10 +74,11 @@ TABELL_SYKEFRAVAER: Final[str] = "14789"
 PUBLISERT: Final[str] = "2026-08-13"
 
 MODEL_YRKE: Final[str] = "mart.arbeidsmarked_yrke"
+MODEL_YRKE_AAR: Final[str] = "mart.arbeidsmarked_yrke_aar"
 MODEL_GRUPPE: Final[str] = "mart.arbeidsmarked_hovedgruppe_kvartal"
 MODEL_REALLONN: Final[str] = "mart.arbeidsmarked_reallonn_gruppe"
 MODEL_KPI: Final[str] = "mart.konsumpris_kvartal"
-MODELS: Final[list[str]] = [MODEL_YRKE, MODEL_GRUPPE, MODEL_REALLONN]
+MODELS: Final[list[str]] = [MODEL_YRKE, MODEL_YRKE_AAR, MODEL_GRUPPE, MODEL_REALLONN]
 
 TABELL_KPI: Final[str] = "14700"
 
@@ -118,12 +124,16 @@ FARGE_MANGLER_STREK: Final[str] = "#7d766a"
 # Ingest
 # --------------------------------------------------------------------------
 def ingest() -> dict[str, Path]:
-    """Hent kodeverket og de fem utsnittene av SSBs yrkesstatistikk.
+    """Hent kodeverket og de sju utsnittene av SSBs yrkesstatistikk.
 
     Utsnittene er delt slik at hvert kall holder seg godt under SSBs grense
     på 150 000 celler, og slik at hvert av dem svarer på ett spørsmål:
-    bestanden over tid, øyeblikksbildet, kjønnsdelingen, aldersdelingen og
+    bestanden over tid, øyeblikksbildet, kjønnsdelingen — både i dag og over
+    tid — aldersdelingen, snittalder og arbeidstid over tid, lønnsserien og
     sykefraværet.
+
+    De tre serieutsnittene er der for tidslinja: et lag leseren kan dra
+    bakover i tid må ha en måling i hvert årspunkt, ikke bare i det siste.
     """
     ssb.probe()
     written: dict[str, Path] = {
@@ -152,6 +162,18 @@ def ingest() -> dict[str, Path]:
         (RAW_ALDER, TABELL, {
             "Yrke": "*", "Kjonn": "0", "Alder": "0-39,40-54,55+",
             "ContentsCode": "Lonsstakere", "Tid": "TOP(1)",
+        }),
+        # Kjønnsdelingen over hele serien: 583 × 2 × 42 celler. Bare
+        # bestanden — medianlønn per kjønn leses av øyeblikksbildet over,
+        # og å ta den med her ville doblet uttrekket uten en leser.
+        (RAW_KJONN_KVARTAL, TABELL, {
+            "Yrke": "*", "Kjonn": "1,2", "Alder": "999D",
+            "ContentsCode": "Lonsstakere", "Tid": "*",
+        }),
+        # Snittalder og avtalt arbeidstid over hele serien: 583 × 2 × 42.
+        (RAW_TREKK_KVARTAL, TABELL, {
+            "Yrke": "*", "Kjonn": "0", "Alder": "999D",
+            "ContentsCode": ",".join(VARIABLER_TREKK), "Tid": "*",
         }),
         # Hele lønnsserien. Trengs for reallønn, som må måles mellom to
         # kvartaler og ikke kan leses av øyeblikksbildet.
@@ -330,15 +352,63 @@ def _finn(df: pl.DataFrame, navn: str) -> int:
 # tegnforklaringen og vite hva hen ser på, uten å måtte vite hvordan
 # fordelingen ser ut.
 class Lag(NamedTuple):
-    """Ett fargelag: hvilken kolonne, hvilke grenser, hvilke ord."""
+    """Ett fargelag: hvilken kolonne, hvilke grenser, hvilke ord.
+
+    ``kolonne`` er kolonnen i øyeblikksbildet og gjelder PNG-en. ``serie``
+    er den samme størrelsen i årstabellen, og er det tidslinja leser.
+
+    ``regel`` skiller de to slagene lag fra hverandre. Et punktlag leser
+    serien i det ene punktet leseren står på; et endringslag regner
+    forholdet mellom to. Forskjellen er ikke bare hvor mange håndtak
+    skinna får — den er hva tallet betyr, og derfor hva som kan gjøre det
+    meningsløst. ``gulv`` finnes bare på endringslag, av den grunnen.
+    """
 
     key: str
     label: str
     kolonne: str
+    serie: str
+    regel: str
     roller: tuple[str, ...]
     grenser: tuple[float, ...]
     tekster: tuple[str, ...]
+    format: publish.Format
     caption: str
+    nivaa_navn: str = ""
+    nivaa_format: publish.Format | None = None
+    gulv: float | None = None
+    mangler_ord: str = "ikke publisert"
+    under_ord: str = ""
+
+
+# Skrivemåtene, én gang hver. De speiler formatfunksjonene over — _kr, _pst,
+# _andel, _aar, _fravaer, _timer — og må gjøre det, ellers står PNG-en og
+# sida med hvert sitt tall for den samme målingen.
+FMT_KR = publish.Format(decimals=0, suffix=" kr")
+FMT_ANTALL = publish.Format(decimals=0)
+FMT_ENDRING = publish.Format(decimals=1, factor=100.0, suffix=" %", sign=True)
+FMT_ANDEL = publish.Format(decimals=1, factor=100.0, suffix=" %")
+# Sykefraværet kommer fra kilden som prosent og skal ikke ganges opp igjen.
+FMT_PROSENT = publish.Format(decimals=1, suffix=" %")
+FMT_AAR = publish.Format(decimals=1, suffix=" år")
+FMT_TIMER = publish.Format(decimals=1, suffix=" t")
+
+
+def _skriv(fmt: publish.Format, verdi: float) -> str:
+    """Et tall skrevet slik ``fmt`` sier — den samme regelen sida bruker.
+
+    Denne finnes for å bli prøvd. Formatene over er en påstand om at sida
+    skriver tallene på samme måte som resten av sakspakken gjør, og en
+    påstand som ikke prøves er en antakelse. ``tests/test_arbeidsmarked.py``
+    kjører den mot _kr, _pst, _andel, _aar, _fravaer og _timer på ekte
+    verdier fra tabellen — det var nettopp den sjekken som fanget at
+    sykefraværet ble ganget med hundre én gang for mye.
+    """
+    x = verdi * fmt.factor
+    tall = f"{x:,.{fmt.decimals}f}".replace(",", " ").replace(".", ",")
+    if fmt.sign and not tall.startswith("-"):
+        tall = "+" + tall
+    return tall + fmt.suffix
 
 
 LAG: Final[tuple[Lag, ...]] = (
@@ -346,90 +416,128 @@ LAG: Final[tuple[Lag, ...]] = (
         key="lonn",
         label="Median månedslønn",
         kolonne="median_lonn",
+        serie="median_lonn",
+        regel="point",
         roller=("skala1", "skala2", "skala3", "skala4", "skala5"),
         grenser=(40_000, 50_000, 60_000, 75_000),
         tekster=(
             "under 40 000 kr", "40–50 000 kr", "50–60 000 kr",
             "60–75 000 kr", "75 000 kr og over",
         ),
-        caption="Median månedslønn omregnet til heltid. De store lyse flatene "
-        "nederst til høyre — butikk, barnehage, renhold, pleie — er der de "
-        "fleste jobber og der lønna er lavest. De mørkeste flisene er små.",
+        format=FMT_KR,
+        caption="Median månedslønn omregnet til heltid, i det året du står på. "
+        "De store lyse flatene nederst til høyre — butikk, barnehage, renhold, "
+        "pleie — er der de fleste jobber og der lønna er lavest. De mørkeste "
+        "flisene er små. Merk at trinnene er i kronene som gjaldt da og ikke "
+        "justert for prisvekst: drar du tidslinja bakover, blir hele figuren "
+        "lysere fordi kronene var færre — ikke fordi arbeidet var dårligere "
+        "betalt. Det er reallønnslaget som skiller de to.",
     ),
     Lag(
         key="vekst",
-        label=f"Endring på {PERIODE_AAR} år",
+        label="Endring i antall",
         kolonne="vekst_pst",
+        serie="lonnstakere",
+        regel="change",
         roller=("avvik1", "avvik2", "avvik3", "avvik4", "avvik5"),
         grenser=(-0.20, -0.05, 0.05, 0.25),
         tekster=(
             "ned over 20 %", "ned 5–20 %", "omtrent uendret",
             "opp 5–25 %", "opp over 25 %",
         ),
-        caption="Målt endring i antall lønnstakere fra samme kvartal ti år før — "
-        "ikke en framskriving. Yrker som ikke kan sammenlignes over ti år er "
-        "skravert; se metodeavsnittet for hvilke og hvorfor.",
+        format=FMT_ENDRING,
+        nivaa_navn="Lønnstakere",
+        nivaa_format=FMT_ANTALL,
+        gulv=float(MINSTE_YRKE),
+        under_ord="ikke sammenlignbar",
+        caption="Målt endring i antall lønnstakere mellom de to punktene du har "
+        f"satt — ikke en framskriving. Yrker med under {MINSTE_YRKE} lønnstakere i "
+        "en av endene er skravert: under et par hundre ansatte flytter én "
+        "arbeidsgivers omorganisering prosenten mer enn arbeidsmarkedet gjør, og "
+        "hvilke yrker som er små endrer seg når du drar i tidslinja. Militære "
+        "yrker og «uoppgitt» er skravert i hele serien; se metodeavsnittet for "
+        "hvorfor.",
     ),
     Lag(
         key="reallonn",
-        label="Reallønn på 10 år",
+        label="Endring i reallønn",
         kolonne="reallonn_vekst_pst",
+        serie="reallonn",
+        regel="change",
         roller=("avvik1", "avvik2", "avvik3", "avvik4", "avvik5"),
         grenser=(-0.05, 0.0, 0.05, 0.10),
         tekster=(
             "ned over 5 %", "ned 0–5 %", "opp 0–5 %",
             "opp 5–10 %", "opp over 10 %",
         ),
-        caption="Endring i medianlønn etter at prisveksten er trukket fra. "
-        "Prisene steg 37 prosent i perioden, så en flis som er blå her har "
-        "hatt lønnsvekst *utover* det. De aller fleste flatene ligger i de "
-        "to midterste trinnene — reallønnsveksten er påfallende jevn.",
+        format=FMT_ENDRING,
+        caption="Endring i medianlønn etter at prisveksten er trukket fra, mellom "
+        "de to punktene du har satt. En blå flis har hatt lønnsvekst *utover* "
+        "prisveksten i nettopp den perioden. Over hele serien ligger de aller "
+        "fleste flatene i de to midterste trinnene — reallønnsveksten er "
+        "påfallende jevn — men dra endene sammen om et enkelt år, og spredningen "
+        "åpner seg.",
     ),
     Lag(
         key="kjonn",
         label="Kvinneandel",
         kolonne="kvinneandel",
+        serie="kvinneandel",
+        regel="point",
         roller=("skala1", "skala2", "skala3", "skala4", "skala5"),
         grenser=(0.20, 0.40, 0.60, 0.80),
         tekster=("under 20 %", "20–40 %", "40–60 %", "60–80 %", "80 % og over"),
+        format=FMT_ANDEL,
         caption="Fordelingen er blokker, ikke en glidende skala. Håndverk og "
         "transport er nesten uten kvinner; helse, omsorg og undervisning er "
         "nesten uten menn. De to blokkene ligger hver sin plass i figuren, og "
         "midtsjiktet er tynnere enn både størrelsen og antallet yrker skulle "
-        "tilsi — se funnet over for tallene.",
+        "tilsi — se funnet over for tallene slik de er i dag. Dra tidslinja "
+        "bakover og se hvor lite blokkene flytter seg.",
     ),
     Lag(
         key="alder",
         label="Gjennomsnittsalder",
         kolonne="gjennomsnittsalder",
+        serie="gjennomsnittsalder",
+        regel="point",
         roller=("skala1", "skala2", "skala3", "skala4", "skala5"),
         grenser=(38, 42, 45, 48),
         tekster=("under 38 år", "38–42 år", "42–45 år", "45–48 år", "48 år og over"),
-        caption="Snittalderen i yrket i dag. Den sier hvem som er der nå, ikke "
-        "hvem som slutter snart — et yrke folk kommer til sent i karrieren har "
-        "høy snittalder uten å være i ferd med å tømmes.",
+        format=FMT_AAR,
+        caption="Snittalderen i yrket i det året du står på. Den sier hvem som er "
+        "der da, ikke hvem som slutter snart — et yrke folk kommer til sent i "
+        "karrieren har høy snittalder uten å være i ferd med å tømmes.",
     ),
     Lag(
         key="sykefravaer",
         label="Sykefravær",
         kolonne="sykefravaer_pst",
+        serie="sykefravaer_pst",
+        regel="point",
         roller=("skala1", "skala2", "skala3", "skala4", "skala5"),
         grenser=(3.0, 4.5, 6.0, 7.5),
         tekster=("under 3 %", "3–4,5 %", "4,5–6 %", "6–7,5 %", "7,5 % og over"),
-        caption="Legemeldt sykefravær i prosent av avtalte dagsverk, 2025. "
-        "Egenmeldt fravær er ikke med. Tallet er ikke justert for alder eller "
-        "kjønn, og en del av mønsteret her er nettopp det.",
+        format=FMT_PROSENT,
+        caption="Legemeldt sykefravær i prosent av avtalte dagsverk. Egenmeldt "
+        "fravær er ikke med. Tallet er årlig og ligger ett år etter resten av "
+        "figuren, så det siste årspunktet er utenfor rekkevidde — den skraverte "
+        "enden av skinna viser hvor langt laget når. Tallet er ikke justert for "
+        "alder eller kjønn, og en del av mønsteret her er nettopp det.",
     ),
     Lag(
         key="arbeidstid",
         label="Avtalt arbeidstid",
         kolonne="avtalt_arbeidstid",
+        serie="avtalt_arbeidstid",
+        regel="point",
         roller=("skala1", "skala2", "skala3", "skala4", "skala5"),
         grenser=(20, 30, 34, 36),
         tekster=(
             "under 20 t/uke", "20–30 t/uke", "30–34 t/uke",
             "34–36 t/uke", "36 t/uke og over",
         ),
+        format=FMT_TIMER,
         caption="Gjennomsnittlig avtalt arbeidstid per uke. Lyse flater er yrker "
         "der stillingene er små — som ikke er det samme som yrker der folk vil "
         "jobbe lite.",
@@ -445,26 +553,6 @@ def _trinn(lag: Lag, verdi: float | None) -> str:
         if verdi < grense:
             return lag.roller[i]
     return lag.roller[-1]
-
-
-def _vekstrolle(rad: dict) -> str:
-    """Vekstlaget skiller «ikke sammenlignbar» fra «ingen endring».
-
-    Et yrke uten sammenlignbar tiårsserie har ikke vekst nær null — det har
-    ingen vekst å vise. De to må se forskjellige ut, ellers leser figuren
-    som om militæret sto stille.
-    """
-    if not rad["sammenlignbar"]:
-        return publish.article.TONE_MANGLER
-    return _trinn(LAG[1], rad["vekst_pst"])
-
-
-def _roller(rad: dict) -> tuple[str, ...]:
-    """Én fargerolle per lag, i lagenes rekkefølge."""
-    return tuple(
-        _vekstrolle(rad) if lag.key == "vekst" else _trinn(lag, rad[lag.kolonne])
-        for lag in LAG
-    )
 
 
 # --------------------------------------------------------------------------
@@ -550,8 +638,9 @@ def _grupper(df: pl.DataFrame) -> list[tuple[str, int, list[dict]]]:
 def _plot_fliser(df: pl.DataFrame, path: Path, periode: str) -> Path:
     """Flisediagrammet som PNG, farget etter medianlønn — lag nummer én.
 
-    PNG-en kan bare vise ett av de seks lagene. Den viser det første, og
-    bildeteksten sier fra om at de fem andre finnes i figuren sida tegner.
+    PNG-en kan bare vise ett av de sju lagene, og bare ett tidspunkt. Den
+    viser det første laget i det siste årspunktet, og bildeteksten sier fra
+    om at de seks andre — og tidslinja — finnes i figuren sida tegner.
     """
     B, H = 1180.0, 760.0
     # Skravurstreken er en global innstilling i matplotlib, ikke et argument
@@ -1014,27 +1103,133 @@ def _avlesning(rad: dict) -> tuple[publish.Readout, ...]:
     )
 
 
-def _graf_fliser(df: pl.DataFrame, kilde: str) -> publish.Chart:
-    """Flisediagrammet med seks lag. Sakens midtpunkt.
+def _tidspunkter(aar_df: pl.DataFrame) -> list[int]:
+    """Årspunktene, stigende. Tidslinjas skala."""
+    return sorted(int(a) for a in aar_df["aar"].unique())
+
+
+def _oppslag(aar_df: pl.DataFrame) -> dict[str, dict[int, dict]]:
+    """{yrke: {år: raden}} — oppslaget seriene bygges av."""
+    ut: dict[str, dict[int, dict]] = {}
+    for rad in aar_df.iter_rows(named=True):
+        ut.setdefault(rad["yrke"], {})[int(rad["aar"])] = rad
+    return ut
+
+
+def _serie(
+    oppslag: dict[str, dict[int, dict]], yrke: str, kolonne: str, aarene: list[int]
+) -> tuple[float | None, ...]:
+    """Én måling per årspunkt, i årenes rekkefølge. Hull blir null.
+
+    Hullene er reelle og skal bli stående. To yrker mangler et helt
+    årspunkt fordi de ikke fantes i standarden det kvartalet, og SSB
+    publiserer ikke median for de minste yrkene i det hele tatt — hvilke
+    som er små endrer seg fra år til år. Å fylle inn nærmeste måling ville
+    gjort begge deler usynlige.
+    """
+    per_aar = oppslag.get(yrke, {})
+    return tuple(
+        None if (rad := per_aar.get(aar)) is None or rad[kolonne] is None
+        else _maal(rad[kolonne])
+        for aar in aarene
+    )
+
+
+def _maal(verdi: float) -> float:
+    """Målingen med så mange siffer den fortjener, og ikke flere.
+
+    Seriene er den største enkeltposten i den ferdige sida — 400 yrker
+    ganger sju lag ganger elleve år — og en kvinneandel skrevet som
+    0,6071904675213324 bruker atten tegn på å si noe figuren viser med
+    tre. Presisjonen som beholdes ligger flere størrelsesordener under
+    både trinngrensene og desimalene laget skriver ut, så hverken fargen
+    eller tallet i boblen kan endre seg av dette.
+    """
+    v = float(verdi)
+    return round(v, 2 if abs(v) >= 100 else 6)
+
+
+def _rekkevidde(
+    oppslag: dict[str, dict[int, dict]], kolonne: str, aarene: list[int]
+) -> tuple[int, int]:
+    """Hvor langt et lag rekker: første og siste årspunkt med en måling.
+
+    Bare sykefraværet svarer noe annet enn hele skinna, og det er poenget
+    med å regne det ut framfor å skrive det av: skulle SSB publisere
+    2026-tallet i morgen, flytter enden seg av seg selv.
+    """
+    med = [
+        i for i, aar in enumerate(aarene)
+        if any(
+            (rad := per_aar.get(aar)) is not None and rad[kolonne] is not None
+            for per_aar in oppslag.values()
+        )
+    ]
+    return (med[0], med[-1]) if med else (0, len(aarene) - 1)
+
+
+def _graf_fliser(df: pl.DataFrame, aar_df: pl.DataFrame, kilde: str) -> publish.Chart:
+    """Flisediagrammet med sju lag og en tidslinje. Sakens midtpunkt.
 
     Merk hva som *ikke* sendes: ingen farger, ingen piksler og ingen
-    oppdeling. Analysen sier hvor stor en flate er og hvilken *rolle* den
-    har i hvert lag; sida regner ut hvor på skjermen den havner.
+    oppdeling. Analysen sier hvor stor en flate er, hvilken serie hvert lag
+    måler, hvor grensene mellom trinnene går, og hva som skal stå når
+    målingen mangler. Sida regner ut hvor på skjermen flisa havner og
+    hvilket trinn tallet lander på i det punktet leseren har valgt.
+
+    Flatene følger bestanden i det siste årspunktet og rører seg ikke når
+    tidslinja dras. Det er et valg og ikke en forglemmelse: en flate som
+    puster med tida er vakrere å se på, men da kan man ikke følge ett yrke
+    gjennom hverken lagene eller årene — og det er nettopp det figuren er
+    til for.
     """
     med_flate = df.filter(pl.col("lonnstakere") > 0)
     rader = list(med_flate.iter_rows(named=True))
-    roller = [_roller(rad) for rad in rader]
+    aarene = _tidspunkter(aar_df)
+    oppslag = _oppslag(aar_df)
+    kvartalsnr = str(aar_df["kvartal"][0])[-1]
+
+    def serier(rad: dict) -> tuple[tuple[float | None, ...], ...]:
+        ut: list[tuple[float | None, ...]] = []
+        for lag in LAG:
+            # Hovedgruppe 0 er «Militære yrker og uoppgitt», og ingen av
+            # delene tåler en bestandsserie: spesialistordningen fra 2016 er
+            # en reform i kodeverket, ikke i arbeidsmarkedet. En tom serie
+            # sier at yrket ikke er *målt* i dette laget — noe annet enn at
+            # det er målt til null. Se mart_arbeidsmarked.py.
+            if lag.key == "vekst" and rad["hovedgruppe"] == UTENFOR_HOVEDGRUPPE:
+                ut.append(())
+            else:
+                ut.append(_serie(oppslag, rad["yrke"], lag.serie, aarene))
+        return tuple(ut)
+
+    alle_serier = [serier(rad) for rad in rader]
 
     # «Ikke publisert» står i tegnforklaringen bare i de lagene som faktisk
-    # har hull. En forklaring på en farge ingen flis har, er én linje leseren
-    # må lete etter og ikke finne.
+    # kan få hull. En forklaring på en farge ingen flis har, er én linje
+    # leseren må lete etter og ikke finne.
+    def har_hull(i: int) -> bool:
+        return any(
+            not serie or any(v is None for v in serie)
+            for serie in (s[i] for s in alle_serier)
+        ) or LAG[i].gulv is not None
+
     lag = tuple(
         publish.Layer(
-            key=l.key, label=l.label,
+            key=l.key,
+            label=l.label,
             legend=tuple(zip(l.roller, l.tekster))
-            + (((publish.article.TONE_MANGLER, "ikke publisert"),)
-               if any(r[i] == publish.article.TONE_MANGLER for r in roller) else ()),
+            + (((publish.article.TONE_MANGLER, "ikke publisert"),) if har_hull(i) else ()),
             caption=l.caption,
+            rule=l.regel,
+            edges=tuple(float(g) for g in l.grenser),
+            format=l.format,
+            level_label=l.nivaa_navn,
+            level_format=l.nivaa_format,
+            floor=l.gulv,
+            span=_rekkevidde(oppslag, l.serie, aarene),
+            missing_label=l.mangler_ord,
+            floor_label=l.under_ord,
         )
         for i, l in enumerate(LAG)
     )
@@ -1043,11 +1238,21 @@ def _graf_fliser(df: pl.DataFrame, kilde: str) -> publish.Chart:
             label=rad["yrke_navn"],
             group=rad["hovedgruppe_navn"],
             size=float(rad["lonnstakere"]),
-            tones=roller[i],
-            values=_avlesning(rad),
+            series=alle_serier[i],
             note=_antall(rad["lonnstakere"]),
         )
         for i, rad in enumerate(rader)
+    )
+    tid = publish.Timeline(
+        labels=tuple(str(a) for a in aarene),
+        label="Tidspunkt",
+        note=f"Ett punkt per år, alltid {kvartalsnr}. kvartal. Samme kvartal i "
+        "hver ende er ikke en forenkling — bestanden svinger systematisk "
+        "gjennom året, og med fritt valgte kvartaler kan man stille inn en "
+        "«endring» som i sin helhet er sesong. Lagene som måler en endring "
+        "har to håndtak, de øvrige ett.",
+        from_point=0,
+        to_point=len(aarene) - 1,
     )
     return publish.Chart(
         kind="treemap",
@@ -1057,15 +1262,18 @@ def _graf_fliser(df: pl.DataFrame, kilde: str) -> publish.Chart:
         "hovedgrupper. Flaten til hver flis følger antall lønnstakere.",
         layers=lag,
         layer_label="Farg flisene etter",
+        timeline=tid,
         link=LENKE,
         picker="Framhev yrke",
         group_label="Avgrens til hovedgruppe",
         width="full",
-        caption="Hver flis er ett av de 407 yrkene i SSBs yrkesstandard, og "
-        "flaten følger antall lønnstakere. Flisene ligger fast når du bytter "
-        "lag, så det samme yrket står på samme sted uansett hva fargen viser. "
-        "Velg et yrke i nedtrekket for å finne det igjen i alle figurene på "
-        "sida.",
+        caption=f"Hver flis er ett av de {df.height} yrkene i SSBs yrkesstandard, "
+        "og flaten følger antall lønnstakere. Flisene ligger fast både når du "
+        "bytter lag og når du drar i tidslinja, så det samme yrket står på "
+        "samme sted uansett hva fargen viser. Dra i håndtakene for å flytte "
+        "målepunktet; lagene som måler en endring har ett håndtak i hver ende "
+        "av perioden. Velg et yrke i nedtrekket for å finne det igjen i alle "
+        "figurene på sida.",
         source=kilde,
     )
 
@@ -1212,6 +1420,7 @@ def _graf_gruppe(df: pl.DataFrame, kilde: str) -> publish.Chart:
 # --------------------------------------------------------------------------
 def artikkel(
     df: pl.DataFrame,
+    aar_df: pl.DataFrame,
     gruppe: pl.DataFrame,
     reallonn: pl.DataFrame,
     kpi: pl.DataFrame,
@@ -1306,7 +1515,7 @@ def artikkel(
                 f"{_kr(vektet_lonn(mannsdominert))}. De kvinnedominerte ligger "
                 f"tettere samlet, på {_kr(vektet_lonn(kvinnedominert))}.",
             )),
-            _graf_fliser(df, kilde),
+            _graf_fliser(df, aar_df, kilde),
         ),
     )
 
@@ -1458,6 +1667,16 @@ def artikkel(
                 "Antall lønnstakere svinger systematisk gjennom året, så to "
                 "vilkårlige kvartaler ville blandet sesong med utvikling.",
 
+                "**Tidslinja i flisediagrammet følger den samme regelen.** Den "
+                f"har ett punkt per år, alle i {forste['kvartal_slutt'][-2:]}, og "
+                "ikke ett per kvartal. Det er ikke for å spare plass: kunne du "
+                "stille inn to vilkårlige kvartaler, kunne du lage en «endring» "
+                "som i sin helhet er sesongsvingning. Hvert utsnitt du kan dra "
+                "fram er dermed målt på samme måte som tiårstallene i teksten. "
+                "De øvrige figurene på sida følger ikke tidslinja — de er "
+                "rangert og opptalt på tiårsperioden, og en rangering som "
+                "sorterer seg om mens du drar ville vært en annen figur.",
+
                 f"**{utenfor.height} av de 407 yrkene er holdt utenfor "
                 f"rangeringen** på vekst. Kravet er minst {_antall(MINSTE_YRKE)} "
                 "lønnstakere i begge ender av perioden, og at yrket ikke ligger "
@@ -1533,11 +1752,21 @@ def artikkel(
                 "verdt å ha i bakhodet gjennom hele saken: dette måler hvor "
                 "mange som *heter* noe, ikke hva de gjør om dagene.",
 
-                "Det som ikke er gjort: lønn er ikke fulgt over tid. Det ville "
-                "krevd deflatering, og nominelle kroner fra to år kan ikke "
-                "sammenlignes uten. Serien finnes i kilden, så saken kan "
-                "utvides den dagen deflateringen er en delt funksjon og ikke en "
-                "kopi til.",
+                "Det som ikke er gjort: **kjønnsforskjellen i lønn er bare "
+                "målt i siste kvartal.** Tidslinja bærer kvinneandelen tilbake "
+                "til "
+                f"{forste['kvartal_start'][:4]}, men ikke medianlønna for kvinner "
+                "og menn hver for seg — det utsnittet er hentet bare for det "
+                "siste kvartalet. Serien finnes i kilden, og saken kan utvides "
+                "med den; det ville doblet uttrekket, og ingen figur her leser "
+                "den ennå.",
+
+                "**Sykefraværet rekker ett år kortere enn resten.** Tabell "
+                f"{TABELL_SYKEFRAVAER} er årlig og publiseres i etterkant, så det "
+                "siste årspunktet på tidslinja har ingen sykefraværsmåling. "
+                "Skinna skraverer den enden framfor å gjenta fjorårets tall. Av "
+                "samme grunn skraveres yrker som mangler måling i akkurat det "
+                "året du står på, også når de har en måling et annet år.",
             )),
             publish.Table(
                 columns=("Hovedgruppe", "Yrker", "Lønnstakere", "Herav kvinner",
@@ -1622,6 +1851,7 @@ def _gruppetabell(df: pl.DataFrame) -> pl.DataFrame:
 def main() -> list[Path]:
     """Bygg sakspakken. Forutsetter at modellene er bygget."""
     df = io.load(MODEL_YRKE)
+    aar_df = io.load(MODEL_YRKE_AAR)
     gruppe = io.load(MODEL_GRUPPE)
     reallonn = io.load(MODEL_REALLONN)
     kpi = io.load(MODEL_KPI)
@@ -1654,7 +1884,7 @@ def main() -> list[Path]:
         _plot_gruppe_kjonn(df, target / "hovedgruppe_kjonn.png", periode),
     ]
 
-    art = artikkel(df, gruppe, reallonn, kpi, proveniens)
+    art = artikkel(df, aar_df, gruppe, reallonn, kpi, proveniens)
     art.validate(target)
     return [
         csv_path,

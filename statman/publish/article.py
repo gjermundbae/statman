@@ -5,9 +5,14 @@ skrives ut i flere former uten å bli skrevet på nytt. Notatet i sakspakken og
 den publiserte siden rendres begge herfra, så de kan ikke gli fra hverandre.
 
 Modellen kjenner ikke til DuckDB, Polars eller matplotlib. Alt som kommer inn
-er ferdig formatert tekst og ferdig valgte tall — publiseringslaget regner
-ingenting ut, og kan derfor ikke regne feil. Det er hele poenget med at det er
-et eget lag.
+er ferdig formatert tekst og ferdig valgte tall — publiseringslaget teller
+ikke, summerer ikke og velger ikke utvalg, og kan derfor ikke velge feil. Det
+er hele poenget med at det er et eget lag.
+
+Ett unntak er skrevet ned og ikke sneket inn: en figur med :class:`Timeline`
+lar leseren velge tidspunktet, og da finnes ikke svaret på forhånd. Der sier
+analysen regelen — hvilken serie, hvilke grenser, hvor mange desimaler — og
+sida bruker den. Se :class:`Layer` og ARCHITECTURE.md.
 
 Forbehold oppgis som *nøkler* inn i ``catalog/metrics.yml``, aldri som tekst.
 Skriver du dem av for hånd her, har du laget en kopi som forvitrer.
@@ -168,6 +173,60 @@ class Guide:
 
 
 @dataclass(frozen=True, slots=True)
+class Format:
+    """Hvordan et tall skrives ut. Analysen bestemmer, sida gjentar.
+
+    Feltet finnes fordi en figur med tidslinje ikke kan få avlesningene
+    sine ferdig formatert: leseren velger tidspunktet, og de tallene er
+    det for mange av til å skrives ut på forhånd. Da er alternativet at
+    rendereren finner på en skrivemåte selv — og «0.6071904675213324»
+    eller «60.72%» er begge feil for en norsk leser.
+
+    Så presisjonen, fortegnet og enheten sies her, én gang per lag, og
+    sida gjør nøyaktig det den får beskjed om. Det er fortsatt analysen
+    som velger hvor mange desimaler et tall tåler.
+
+    ``factor`` ganges på verdien før avrunding: 100 gjør en andel til
+    prosent. ``sign`` setter pluss foran positive tall, som en endring
+    skal ha og en beholdning ikke.
+    """
+
+    decimals: int = 0
+    factor: float = 1.0
+    suffix: str = ""
+    sign: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Timeline:
+    """Skinna leseren kan dra i, og hvor håndtakene står når sida åpnes.
+
+    ``labels`` er punktene, ferdig skrevet — «2016», «2017». Antallet
+    dem er også seriens lengde: hvert merke skal ha én måling per punkt,
+    i denne rekkefølgen.
+
+    Punktene er *ikke* nødvendigvis alt kilden har. Ett punkt per år, i
+    samme kvartal, er et valg tatt i analysen, og det er grunnen til at
+    lista kommer ferdig hit i stedet for å utledes av seriene: en leser
+    som kan stille inn to vilkårlige kvartaler kan lage en «endring» som
+    i sin helhet er sesongsvingning.
+
+    Det er to håndtak, ikke tre: ``to_point`` er det ene håndtaket i et
+    punktlag *og* den høyre enden i et endringslag, og ``from_point`` er
+    den venstre. Med bare ett tidspunkt å bære videre følger stillingen
+    leseren har valgt med når hen bytter lag, i stedet for å sprette
+    tilbake. Standardstillingen er et redaksjonelt valg — den er utsnittet
+    saken faktisk argumenterer for.
+    """
+
+    labels: tuple[str, ...]
+    label: str = ""
+    note: str = ""
+    from_point: int = 0
+    to_point: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class Layer:
     """Ett fargelag i en figur som kan farges på flere måter.
 
@@ -178,12 +237,45 @@ class Layer:
     ``legend`` er ``(tone, tekst)`` og forklarer hva trinnene betyr *i dette
     laget* — «under 40 000 kr», ikke «skala1». Uten den er en ordnet skala
     bare fem farger.
+
+    Resten av feltene gjelder bare figurer med :class:`Timeline`, og de er
+    der fordi tidslinja flytter én ting inn i nettleseren: *hvilket* av
+    lagets trinn en måling havner på, når leseren har valgt tidspunktet.
+    Inndelinga selv står fortsatt her. ``edges`` er grensene mellom
+    trinnene, i samme rekkefølge som ``legend``, og en skala med fem trinn
+    har fire av dem.
+
+    ``rule`` sier hva som måles: ``"point"`` leser serien i det ene
+    punktet leseren står på, ``"change"`` regner endringen mellom de to.
+    ``floor`` er nedre grense for at en endring i det hele tatt skal
+    vises — under et par hundre ansatte flytter én omorganisering
+    prosenten mer enn arbeidsmarkedet gjør — og den prøves mot begge
+    endene, siden hvilke yrker som er små endrer seg over tid.
+
+    ``span`` er ``(fra, til)`` inn i ``Timeline.labels`` og sier hvor
+    langt laget rekker. Sykefraværet er årlig og ligger et år etter
+    bestanden; da skal skinna vise det, ikke late som målingen finnes.
+
+    ``missing_label`` og ``floor_label`` er ordene for de to måtene et tall
+    kan mangle på, og de er to og ikke ett fordi de betyr forskjellige
+    ting: «ikke publisert» er kilden som tier, «ikke sammenlignbar» er vi
+    som lar være å regne. Begge skrives her — rendereren skal aldri finne
+    på en formulering om hvorfor et tall mangler.
     """
 
     key: str
     label: str
     legend: tuple[tuple[str, str], ...] = ()
     caption: str = ""
+    rule: str = ""
+    edges: tuple[float, ...] = ()
+    format: Format | None = None
+    level_label: str = ""
+    level_format: Format | None = None
+    floor: float | None = None
+    span: tuple[int, int] = ()
+    missing_label: str = ""
+    floor_label: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,6 +289,12 @@ class Mark:
 
     ``tones`` er én rolle per lag i en figur med :class:`Layer`-lag, i samme
     rekkefølge som lagene. ``tone`` gjelder når figuren ikke har lag.
+
+    ``series`` erstatter ``tones`` i en figur med :class:`Timeline`: én
+    målt serie per lag, i lagenes rekkefølge, med én verdi per punkt på
+    tidslinja. ``None`` er et hull — ikke publisert i det punktet — og en
+    **tom serie** betyr at merket ikke er målt i det laget i det hele
+    tatt. De to er ikke det samme, og ingen av dem er en måling på null.
     """
 
     label: str
@@ -212,6 +310,7 @@ class Mark:
     tones: tuple[str, ...] = ()
     points: tuple[tuple[float, float], ...] = ()
     point_labels: tuple[str, ...] = ()
+    series: tuple[tuple[float | None, ...], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,6 +348,7 @@ class Chart:
     width: str = "bred"
     layers: tuple[Layer, ...] = ()
     layer_label: str = ""
+    timeline: Timeline | None = None
 
     def spec(self) -> dict[str, Any]:
         """Figuren som json-klare data — det sida får å tegne etter."""
@@ -273,6 +373,16 @@ KINDS: tuple[str, ...] = ("scatter", "strip", "bars", "treemap", "line")
 # her ville blitt skrevet til fila og aldri tegnet — leseren hadde fått en
 # velger som ikke gjorde noe.
 KINDS_MED_LAG: tuple[str, ...] = ("treemap",)
+
+# Figurtyper som kan ha tidslinje. Snevrere enn KINDS_MED_LAG med vilje:
+# en tidslinje flytter *fargen* på en flate som ligger i ro. Skulle en
+# rangert stripe følge den, måtte den sorteres og telles opp på nytt for
+# hver stilling håndtaket står i, og opptelling er ikke rendererens jobb.
+KINDS_MED_TID: tuple[str, ...] = ("treemap",)
+
+# Hva et lag måler når tidslinja styrer det. «point» leser serien i det ene
+# punktet, «change» regner endringen mellom de to.
+RULES: tuple[str, ...] = ("point", "change")
 
 Block = Union[Prose, Findings, Stats, Figure, Table, Chart]
 
@@ -555,6 +665,8 @@ def _sjekk_figur(chart: Chart, seksjon: str) -> list[str]:
 
     feil += _sjekk_lag(chart, hvor)
 
+    feil += _sjekk_tidslinje(chart, hvor)
+
     if chart.kind == "treemap":
         # Flatene *er* påstanden i et flisediagram: at de til sammen utgjør
         # helheten. En negativ størrelse har ingen flate å være, og en figur
@@ -592,12 +704,133 @@ def _sjekk_lag(chart: Chart, hvor: str) -> list[str]:
     # Et merke som mangler en rolle i ett av lagene ville blitt usynlig i
     # nettopp det laget, og bare der. Det er den slags feil som ikke oppdages
     # før noen bytter lag i nettleseren.
-    ventet = len(chart.layers)
-    mangler = [m.label for m in chart.marks if len(m.tones) != ventet]
-    if mangler:
+    #
+    # Med tidslinje er det seriene som bærer fargen, og da er rollene
+    # overflødige — 400 merker ganger sju lag er hundre kilobyte som ingen
+    # leser. Sjekken flytter tilsvarende til _sjekk_tidslinje.
+    if chart.timeline is None:
+        ventet = len(chart.layers)
+        mangler = [m.label for m in chart.marks if len(m.tones) != ventet]
+        if mangler:
+            feil.append(
+                f"{hvor} har {ventet} fargelag, men {len(mangler)} merker oppgir "
+                f"et annet antall roller (f.eks. {mangler[0]!r})"
+            )
+    return feil
+
+
+def _sjekk_tidslinje(chart: Chart, hvor: str) -> list[str]:
+    """Sjekkene på en tidslinje. Hver av dem skal kunne feile."""
+    feil: list[str] = []
+    tid = chart.timeline
+
+    if tid is None:
+        # Serier uten tidslinje har ingenting å være indeksert etter, og
+        # ville blitt skrevet til fila og aldri lest.
+        med_serie = [m.label for m in chart.marks if m.series]
+        if med_serie:
+            feil.append(
+                f"{hvor} har {len(med_serie)} merker med serier, men ingen "
+                f"tidslinje å lese dem langs (f.eks. {med_serie[0]!r})"
+            )
+        med_regel = [l.key for l in chart.layers if l.rule]
+        if med_regel:
+            feil.append(
+                f"{hvor} har fargelag med regel ({med_regel[0]!r}), men ingen "
+                "tidslinje å bruke den på"
+            )
+        return feil
+
+    if chart.kind not in KINDS_MED_TID:
         feil.append(
-            f"{hvor} har {ventet} fargelag, men {len(mangler)} merker oppgir "
-            f"et annet antall roller (f.eks. {mangler[0]!r})"
+            f"{hvor} har tidslinje, men {chart.kind!r} tegnes uten. "
+            f"Typer med tidslinje: {', '.join(KINDS_MED_TID)}"
+        )
+    if not chart.layers:
+        feil.append(f"{hvor} har tidslinje uten fargelag, og styrer da ingenting")
+
+    n = len(tid.labels)
+    # Ett punkt er ikke en tidslinje, det er et tidspunkt.
+    if n < 2:
+        feil.append(f"{hvor} har en tidslinje med {n} punkter, og trenger minst to")
+        return feil
+
+    for navn, i in (("from_point", tid.from_point), ("to_point", tid.to_point)):
+        if not 0 <= i < n:
+            feil.append(
+                f"{hvor} har tidslinje der {navn} står på {i}, utenfor de {n} punktene"
+            )
+    if tid.from_point > tid.to_point:
+        feil.append(
+            f"{hvor} har en tidslinje som starter etter at den slutter "
+            f"({tid.from_point} > {tid.to_point})"
+        )
+
+    for lag in chart.layers:
+        hvem = f"{hvor}: fargelaget {lag.key!r}"
+        if lag.rule not in RULES:
+            feil.append(
+                f"{hvem} har regelen {lag.rule!r}, som ikke finnes. "
+                f"Kjente: {', '.join(RULES)}"
+            )
+        if not lag.edges:
+            feil.append(f"{hvem} har ingen grenser, og kan da ikke velge et trinn")
+        elif len(lag.legend) not in (len(lag.edges) + 1, len(lag.edges) + 2):
+            # Tegnforklaringen *er* skalaen: de første postene er trinnene i
+            # rekkefølge, og en post til på slutten er hullet. Stemmer ikke
+            # antallet, viser figuren og forklaringen hver sin inndeling.
+            feil.append(
+                f"{hvem} har {len(lag.edges)} grenser og {len(lag.legend)} poster i "
+                f"tegnforklaringen — ventet {len(lag.edges) + 1} trinn, "
+                "eventuelt ett til for hullet"
+            )
+        elif len(lag.legend) == len(lag.edges) + 2 and lag.legend[-1][0] != TONE_MANGLER:
+            feil.append(
+                f"{hvem} har en post for mye i tegnforklaringen, og den siste er "
+                f"ikke {TONE_MANGLER!r}"
+            )
+        if list(lag.edges) != sorted(lag.edges):
+            feil.append(f"{hvem} har grenser som ikke stiger")
+        if lag.format is None:
+            feil.append(f"{hvem} sier ikke hvordan tallet skal skrives")
+        if lag.floor is not None and lag.rule != "change":
+            feil.append(f"{hvem} har en nedre grense, men måler ikke en endring")
+        if not lag.missing_label:
+            feil.append(f"{hvem} sier ikke hva som skal stå der målingen mangler")
+        if lag.floor is not None and not lag.floor_label:
+            feil.append(f"{hvem} har en nedre grense, men ikke et ord for å ligge under den")
+        if lag.floor_label and lag.floor is None:
+            feil.append(f"{hvem} har et ord for å ligge under en grense den ikke har")
+        if bool(lag.level_label) != bool(lag.level_format):
+            feil.append(f"{hvem} oppgir nivået med bare halvparten av det som trengs")
+        if lag.span:
+            if len(lag.span) != 2:
+                feil.append(f"{hvem} har en rekkevidde som ikke er (fra, til)")
+            elif not (0 <= lag.span[0] <= lag.span[1] < n):
+                feil.append(
+                    f"{hvem} rekker fra {lag.span[0]} til {lag.span[1]}, "
+                    f"utenfor de {n} punktene"
+                )
+
+    # En serie som ikke følger punktene ville lest en måling av et annet år.
+    # Tom serie er tillatt og betyr noe eget — se Mark.series.
+    ventet = len(chart.layers)
+    skjeve = [m.label for m in chart.marks if len(m.series) != ventet]
+    if skjeve:
+        feil.append(
+            f"{hvor} har {ventet} fargelag, men {len(skjeve)} merker oppgir et "
+            f"annet antall serier (f.eks. {skjeve[0]!r})"
+        )
+    korte = [
+        (m.label, i)
+        for m in chart.marks
+        for i, serie in enumerate(m.series)
+        if serie and len(serie) != n
+    ]
+    if korte:
+        feil.append(
+            f"{hvor} har {len(korte)} serier med et annet antall målinger enn "
+            f"tidslinjas {n} punkter (f.eks. {korte[0][0]!r} i lag {korte[0][1]})"
         )
     return feil
 
@@ -616,7 +849,7 @@ def _block_to_dict(block: Block) -> dict[str, Any]:
 # ikke sier noe. Lesingen fyller standardverdiene inn igjen, så rundturen er
 # uendret. Bare de nye typene komprimeres — de gamle blokkene skal beholde
 # formen sin, så ingen publisert artikkel.json endrer seg uten grunn.
-_KOMPAKTE: tuple[type, ...] = (Axis, Readout, Guide, Mark, Layer)
+_KOMPAKTE: tuple[type, ...] = (Axis, Readout, Guide, Mark, Layer, Format, Timeline)
 
 
 def _plain(value: Any) -> Any:
@@ -689,14 +922,51 @@ def _chart_from_dict(data: dict[str, Any]) -> Chart:
             tones=tuple(str(t) for t in rå.get("tones") or ()),
             points=tuple((float(x), float(y)) for x, y in rå.get("points") or ()),
             point_labels=tuple(str(t) for t in rå.get("point_labels") or ()),
+            series=tuple(
+                tuple(None if v is None else float(v) for v in serie)
+                for serie in rå.get("series") or ()
+            ),
+        )
+
+    def formatering(rå: Any) -> Format | None:
+        # `is None`, ikke `not rå`: et format der alt står på standardverdi
+        # skrives kompakt som `{}`, og det er et format — ikke fraværet av ett.
+        if rå is None:
+            return None
+        return Format(
+            decimals=int(rå.get("decimals", 0)),
+            factor=float(rå.get("factor", 1.0)),
+            suffix=str(rå.get("suffix", "")),
+            sign=bool(rå.get("sign", False)),
         )
 
     def lag(rå: dict[str, Any]) -> Layer:
+        grense = rå.get("floor")
         return Layer(
             key=str(rå.get("key", "")),
             label=str(rå.get("label", "")),
             legend=tuple((str(t), str(s)) for t, s in rå.get("legend") or ()),
             caption=str(rå.get("caption", "")),
+            rule=str(rå.get("rule", "")),
+            edges=tuple(float(e) for e in rå.get("edges") or ()),
+            format=formatering(rå.get("format")),
+            level_label=str(rå.get("level_label", "")),
+            level_format=formatering(rå.get("level_format")),
+            floor=None if grense is None else float(grense),
+            span=tuple(int(i) for i in rå.get("span") or ()),  # type: ignore[arg-type]
+            missing_label=str(rå.get("missing_label", "")),
+            floor_label=str(rå.get("floor_label", "")),
+        )
+
+    def tidslinje(rå: Any) -> Timeline | None:
+        if rå is None:
+            return None
+        return Timeline(
+            labels=tuple(str(t) for t in rå.get("labels") or ()),
+            label=str(rå.get("label", "")),
+            note=str(rå.get("note", "")),
+            from_point=int(rå.get("from_point", 0)),
+            to_point=int(rå.get("to_point", 0)),
         )
 
     return Chart(
@@ -723,6 +993,7 @@ def _chart_from_dict(data: dict[str, Any]) -> Chart:
         width=str(data.get("width", "bred")),
         layers=tuple(lag(l) for l in data.get("layers") or ()),
         layer_label=str(data.get("layer_label", "")),
+        timeline=tidslinje(data.get("timeline")),
     )
 
 

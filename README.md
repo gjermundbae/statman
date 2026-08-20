@@ -77,11 +77,14 @@ et titalls grensejusteringer. Begrunnelsen for hvordan det håndteres står i
 `statman/models/mart_befolkning.py`, ikke her.
 
 **`arbeidsmarked`** kobler SSBs yrkesstatistikk og konsumprisindeksen til 407
-yrker i STYRK-08, og tegner dem som et flisediagram med sju fargelag — det siste
-er reallønnsutvikling. Det tunge der er å vite hvilke yrker som *ikke* tåler en
-tiårsserie: en omkoding i Forsvaret ser ut som 365 prosent vekst, «Uoppgitt» er
-ikke et yrke, og SSB merker selv et brudd i yrkesrapporteringen midt i perioden.
-Se `statman/models/mart_arbeidsmarked.py`.
+yrker i STYRK-08, og tegner dem som et flisediagram med sju fargelag og en
+tidslinje leseren kan dra i — ett håndtak i punktlagene, to i lagene som måler
+en endring. Det tunge der er å vite hvilke yrker som *ikke* tåler en tidsserie:
+en omkoding i Forsvaret ser ut som 365 prosent vekst, «Uoppgitt» er ikke et
+yrke, og SSB merker selv et brudd i yrkesrapporteringen midt i perioden. Punktene
+er ett per år i samme kvartal, av samme grunn: med fritt valgte kvartaler kan
+leseren stille inn en «endring» som i sin helhet er sesongsvingning. Se
+`statman/models/mart_arbeidsmarked.py`.
 
 ## Analyse
 
@@ -228,6 +231,67 @@ dem stopper publiseringen, for det ville blitt usynlig i nøyaktig ett lag.
 Oppdelingen regnes ut i sida (squarified treemap); analysen sier bare hvor stor
 en flate er. PNG-en under kan bare vise ett av lagene, og det skal stå i
 bildeteksten hvilket.
+
+### Tidslinje leseren kan dra i
+
+Et flisediagram med `timeline` lar leseren velge *når* laget måles. Punktlag
+får ett håndtak, endringslag får ett i hver ende. Da kan ikke fargen komme
+ferdig utregnet — det er for mange utfall — så laget oppgir regelen i stedet,
+og hvert merke bærer én målt serie per lag:
+
+```python
+publish.Chart(
+    kind="treemap",
+    timeline=publish.Timeline(
+        labels=("2016", "2017", …, "2026"),   # ett punkt per år, samme kvartal
+        label="Tidspunkt", note="…",
+        from_point=0, to_point=10,            # der håndtakene står ved åpning
+    ),
+    layers=(
+        publish.Layer(
+            "kjonn", "Kvinneandel",
+            legend=(("skala1", "under 20 %"), …, ("skala5", "80 % og over")),
+            rule="point",                     # leser serien i det ene punktet
+            edges=(0.20, 0.40, 0.60, 0.80),   # fire grenser, fem trinn
+            format=publish.Format(decimals=1, factor=100.0, suffix=" %"),
+            missing_label="ikke publisert",
+        ),
+        publish.Layer(
+            "vekst", "Endring i antall",
+            legend=(("avvik1", "ned over 20 %"), …, ("mangler", "ikke publisert")),
+            rule="change",                    # regner endringen mellom de to
+            edges=(-0.20, -0.05, 0.05, 0.25),
+            format=publish.Format(decimals=1, factor=100.0, suffix=" %", sign=True),
+            level_label="Lønnstakere", level_format=publish.Format(),
+            floor=500.0, floor_label="ikke sammenlignbar",
+            missing_label="ikke publisert",
+            span=(0, 10),                     # hvor langt laget rekker
+        ),
+    ),
+    marks=(
+        publish.Mark(label="Sykepleiere", group="Akademiske yrker", size=59306,
+                     series=((0.87, 0.87, …), (54_000, 55_100, …))),
+    ),
+    fallback="fliser.png", alt="…",
+)
+```
+
+`edges` er grensene mellom trinnene i `legend`, i samme rekkefølge, og en
+skala med fem trinn har fire av dem — er antallet skjevt, stopper
+publiseringen. `format` sier hvordan tallet skrives; `floor` er nedre grense
+for at en endring i det hele tatt skal vises, og prøves mot begge endene.
+`span` er hvor langt laget rekker inn i `labels` — sykefraværet er årlig og
+ligger etter bestanden, og skinna skraverer resten framfor å late som målingen
+finnes.
+
+I serien er `None` et hull — ikke publisert i det punktet — og en **tom serie**
+betyr at merket ikke er målt i det laget i det hele tatt. De to er ikke det
+samme, og ingen av dem er en måling på null.
+
+Med tidslinje bygges boblen av lagene i stedet for av `values`: å vise faste
+avlesninger fra siste kvartal mens flaten er farget etter 2018 ville vært å si
+to ting samtidig. Hvorfor regnestykket får skje i sida i det hele tatt står i
+[ARCHITECTURE.md](ARCHITECTURE.md#tidslinja-og-hva-den-gjorde-med-regelen).
 
 ### Linjediagram
 

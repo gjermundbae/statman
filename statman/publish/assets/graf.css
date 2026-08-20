@@ -272,6 +272,108 @@
 }
 .graf-lag button:focus-visible { outline: 2px solid var(--aksent); outline-offset: 1px; }
 
+/* ---------------------------------------------------------------- tidslinja */
+/* Skinna tar hele bredden av panelet og legger seg under lagknappene: den
+   gjelder alle lagene, ikke ett av dem, og et felt som står på linje med de
+   andre ville sett ut som enda en velger.
+
+   Bare endene er navngitt. Elleve årstall langs skinna kolliderer med
+   hverandre på en smal skjerm, og lesningen over håndtakene sier uansett
+   nøyaktig hvor de står. */
+.graf-tid { flex: 1 0 100%; }
+.graf-skinne {
+  position: relative;
+  height: 46px;
+  /* Halve håndtaket stikker utenfor skinna i hver ende. Uten luften blir
+     det avkortet mot panelkanten i ytterstillingene. */
+  margin: 0 9px;
+  touch-action: none;
+}
+
+/* Sporet, det som er utenfor lagets rekkevidde, og det valgte spennet —
+   tre strøk over hverandre i samme høyde. */
+.graf-spor, .graf-spor-ute, .graf-spor-valgt {
+  position: absolute; top: 23px; height: 3px;
+  border-radius: 2px;
+  transform: translateY(-50%);
+}
+.graf-spor { left: 0; right: 0; background: var(--rutenett); }
+.graf-spor-valgt { background: var(--blekk); opacity: 0.75; }
+/* Utenfor rekkevidde er ikke «tomt», det er «her finnes ingen måling». Samme
+   skravur som flisene bruker til det samme, i det små. */
+.graf-spor-ute[hidden], .graf-spor-valgt[hidden] { display: none; }
+.graf-spor-ute {
+  background: repeating-linear-gradient(
+    45deg, var(--mangler) 0 2px, var(--mangler-strek) 2px 4px);
+  opacity: 0.55;
+}
+
+.graf-tikk {
+  position: absolute; top: 23px;
+  width: 1px; height: 9px;
+  margin-left: -0.5px;
+  background: var(--dis);
+  transform: translateY(-50%);
+}
+
+.graf-ende {
+  position: absolute; top: 32px;
+  font: 500 0.7rem/1 var(--sans);
+  color: var(--svak);
+  font-variant-numeric: tabular-nums;
+}
+.graf-ende.start { left: 0; }
+.graf-ende.slutt { right: 0; }
+
+/* Lesningen står over spennet og følger med når det flyttes. Én tekst og
+   ikke én per håndtak: to etiketter som glir inn i hverandre når håndtakene
+   nærmer seg er nettopp det man ikke vil ha. */
+.graf-lesning {
+  position: absolute; top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font: 650 0.82rem/1 var(--sans);
+  color: var(--blekk);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Skinneprefikset er ikke pynt: `.graf-styring button` står lenger opp i
+   fila med samme spesifisitet pluss et elementnavn, og ville ellers gitt
+   håndtakene knappenes utfylling og ramme. */
+.graf-skinne .graf-haandtak {
+  position: absolute; top: 23px;
+  width: 15px; height: 15px; padding: 0;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid var(--papir);
+  background: var(--blekk);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  cursor: grab;
+  touch-action: none;
+}
+.graf-skinne .graf-haandtak[hidden] { display: none; }
+.graf-skinne .graf-haandtak.drar { cursor: grabbing; }
+.graf-skinne .graf-haandtak:hover { background: var(--aksent); border-color: var(--papir); }
+.graf-skinne .graf-haandtak:focus-visible { outline: 2px solid var(--aksent); outline-offset: 2px; }
+/* «Fra» er hult og «til» er fylt. Formen skiller dem, ikke fargen — hvilken
+   ende av perioden man har tak i skal kunne leses i gråtoner. */
+.graf-skinne .graf-haandtak.fra { background: var(--papir); border-color: var(--blekk); }
+.graf-skinne .graf-haandtak.fra:hover { border-color: var(--aksent); background: var(--papir); }
+
+.graf-tid-note {
+  margin: 0.55rem 0 0;
+  font-size: 0.76rem; line-height: 1.5; color: var(--svak);
+}
+
+/* Håndtakene glir mellom årspunktene. Uten bevegelse hopper de rett dit —
+   stillingen er den samme, den bare kommer ikke glidende. */
+.graf-skinne .graf-haandtak,
+.graf-spor-valgt, .graf-lesning { transition: left 90ms ease, width 90ms ease; }
+.rolig .graf-skinne .graf-haandtak,
+.rolig .graf-spor-valgt, .rolig .graf-lesning { transition: none; }
+.graf-skinne .graf-haandtak.drar { transition: none; }
+
 /* Bildeteksten som hører til det valgte laget, ikke til figuren. */
 .graf-lagtekst {
   margin: 0 0 0.8rem;

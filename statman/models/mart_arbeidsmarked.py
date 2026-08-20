@@ -81,8 +81,11 @@ BRUDD_TIL: Final[str] = "2025K1"
         # Flisediagrammets grunnforutsetning: hver flate har en positiv
         # eller null størrelse, og ingen mangler.
         "lonnstakere >= 0",
-        # En median på null kroner skal være fjernet, ikke beholdt.
+        # En median på null kroner skal være fjernet, ikke beholdt. Det
+        # samme gjelder en snittalder og en arbeidstid på null.
         "median_lonn is null or median_lonn > 0",
+        "gjennomsnittsalder is null or gjennomsnittsalder > 0",
+        "avtalt_arbeidstid is null or avtalt_arbeidstid > 0",
         # Null er tillatt, og betyr noe: sju av de 407 yrkene har ingen
         # lønnstakere igjen i det hele tatt, og en andel av null personer
         # er ikke null prosent — den finnes ikke. De blir flater uten
@@ -214,8 +217,13 @@ def mart_arbeidsmarked_yrke(ctx: Context) -> Any:
             nullif(s.median_lonn, 0)                            as median_lonn,
             nullif(k.lonn_kvinner, 0)                           as median_lonn_kvinner,
             nullif(k.lonn_menn, 0)                              as median_lonn_menn,
-            s.gjennomsnittsalder                                as gjennomsnittsalder,
-            s.avtalt_arbeidstid                                 as avtalt_arbeidstid,
+            -- Samme regel som over, og av samme grunn: begge er
+            -- gjennomsnitt over personer som har yrket, og kilden skriver 0
+            -- der det ikke er noen igjen. Uten nullif havner de fire tomme
+            -- yrkene på det laveste trinnet i figuren — farget som «under
+            -- 38 år» og «under 20 t/uke», som om de var målt.
+            nullif(s.gjennomsnittsalder, 0)                     as gjennomsnittsalder,
+            nullif(s.avtalt_arbeidstid, 0)                      as avtalt_arbeidstid,
 
             cast(k.kvinner as bigint)                           as kvinner,
             cast(k.menn as bigint)                              as menn,
@@ -436,4 +444,151 @@ def mart_arbeidsmarked_hovedgruppe_kvartal(ctx: Context) -> Any:
         group by 1, 2, 3
         having sum(k.lonnstakere) > 0
         order by hovedgruppe, kvartal
+    """)
+
+
+@model(
+    name="mart.arbeidsmarked_yrke_aar",
+    deps=[
+        "clean.styrk",
+        "clean.yrke_kvartal",
+        "clean.yrke_kjonn_kvartal",
+        "clean.yrke_trekk_kvartal",
+        "clean.yrke_sykefravaer",
+        "mart.arbeidsmarked_lonn_kvartal",
+    ],
+    checks=[
+        "unique:yrke,aar",
+        "min_rows:1",
+        "not_null:yrke_navn",
+        "length(yrke) = 4",
+        "lonnstakere >= 0",
+        # De samme reglene som i øyeblikksbildet, år for år. En median, en
+        # snittalder og en arbeidstid på null er kildens måte å si «ingen å
+        # regne over», og skal være null her — ikke et målt nullpunkt.
+        "median_lonn is null or median_lonn > 0",
+        "reallonn is null or reallonn > 0",
+        "gjennomsnittsalder is null or gjennomsnittsalder > 0",
+        "avtalt_arbeidstid is null or avtalt_arbeidstid > 0",
+        "kvinneandel is null or kvinneandel between 0 and 1",
+        "sykefravaer_pst is null or sykefravaer_pst between 0 and 30",
+        # Kjønnene skal dele opp nøyaktig den samme bestanden som totalen, i
+        # hvert eneste årspunkt. Er de ikke det, er kjønnsserien koblet på
+        # feil kvartal — en feil som ellers gir kvinneandeler som ser helt
+        # rimelige ut.
+        "coalesce(kvinner, 0) + coalesce(menn, 0) = lonnstakere",
+        # Årspunktet må ligge i det året det sier det gjør. Uten den kan en
+        # feilkobling i `punkter` gi et 2019-kvartal merket som 2020, og
+        # ingenting annet i tabellen ville sett galt ut.
+        "kvartal = cast(aar as varchar) || substr(kvartal, 5, 2)",
+    ],
+    doc="Ett rad per yrke og årspunkt: bestand, lønn, reallønn, kjønn, alder, arbeidstid og sykefravær.",
+)
+def mart_arbeidsmarked_yrke_aar(ctx: Context) -> Any:
+    """Yrkene år for år — grunnlaget for tidslinja leseren kan dra i.
+
+    Dette er den samme tabellen som ``mart.arbeidsmarked_yrke``, men målt
+    i hvert av årspunktene i stedet for bare i endene. Tre valg bærer den:
+
+    **Ett årspunkt per år, i samme kvartal.** Serien fra SSB er kvartalsvis,
+    og et punkt per kvartal ville gitt leseren 42 håndtaksposisjoner i
+    stedet for elleve. Det er ikke først og fremst et spørsmål om plass.
+    Bestanden svinger systematisk gjennom året, og med fritt valgte
+    kvartaler kan leseren stille inn en «endring» som i sin helhet er
+    sesong — 2019K2 mot 2024K4 leses som en trend. Ankeret er kvartalet i
+    den siste målingen, det samme som resten av saken bruker, slik at hver
+    avlesning tidslinja kan lage følger nøyaktig den regelen artikkelen
+    selv følger. Se ``PERIODE_AAR`` og moduldocstringen over.
+
+    **Hull forblir hull.** Et yrke som ikke hadde publisert medianlønn i
+    2019 får null der, ikke fjorårets tall og ikke et interpolert. Figuren
+    skraverer det, og skraveringen er en opplysning: SSB publiserer ikke
+    median for de minste yrkene, og hvilke yrker som er små endrer seg.
+
+    **Sykefraværet er årlig og ligger et år etter.** Tabell 14789 er ikke
+    kvartalsvis, så årspunktet kobles på kalenderåret. Det siste
+    årspunktet har derfor ingen sykefraværsmåling ennå. Det er ikke en
+    feil, og det skal ikke fylles inn; laget oppgir selv hvor langt det
+    rekker, og tidslinja viser resten av skinna som utenfor rekkevidde.
+    """
+    return ctx.sql("""
+        with anker as (
+            -- Kvartalsnummeret i den siste målingen. Alle årspunkter tas
+            -- fra dette kvartalet, i hvert år det finnes.
+            select substr(max(kvartal), 5, 2) as kvartalsnr
+            from clean_yrke_kvartal
+        ),
+        punkter as (
+            select
+                cast(substr(k.kvartal, 1, 4) as integer) as aar,
+                k.kvartal                                as kvartal
+            from clean_yrke_kvartal k, anker a
+            where substr(k.kvartal, 5, 2) = a.kvartalsnr
+            group by 1, 2
+        ),
+        bestand as (
+            select p.aar, p.kvartal, k.yrke, k.lonnstakere
+            from clean_yrke_kvartal k
+            join punkter p on p.kvartal = k.kvartal
+        ),
+        kjonn as (
+            select
+                p.aar,
+                k.yrke,
+                max(case when k.kjonn = 'kvinner' then k.lonnstakere end) as kvinner,
+                max(case when k.kjonn = 'menn'    then k.lonnstakere end) as menn
+            from clean_yrke_kjonn_kvartal k
+            join punkter p on p.kvartal = k.kvartal
+            group by 1, 2
+        ),
+        trekk as (
+            select
+                p.aar,
+                t.yrke,
+                max(case when t.variabel = 'gjsnalder'   then t.verdi end) as gjennomsnittsalder,
+                max(case when t.variabel = 'gjavtarbtid' then t.verdi end) as avtalt_arbeidstid
+            from clean_yrke_trekk_kvartal t
+            join punkter p on p.kvartal = t.kvartal
+            group by 1, 2
+        ),
+        lonn as (
+            select
+                p.aar,
+                l.yrke,
+                l.median_lonn_nominell as median_lonn,
+                l.median_lonn_realt    as reallonn
+            from mart_arbeidsmarked_lonn_kvartal l
+            join punkter p on p.kvartal = l.kvartal
+        )
+        select
+            b.yrke                                              as yrke,
+            y.navn                                              as yrke_navn,
+            substr(b.yrke, 1, 1)                                as hovedgruppe,
+            h.navn                                              as hovedgruppe_navn,
+            b.aar                                               as aar,
+            b.kvartal                                           as kvartal,
+
+            cast(b.lonnstakere as bigint)                       as lonnstakere,
+            cast(k.kvinner as bigint)                           as kvinner,
+            cast(k.menn as bigint)                              as menn,
+            -- nullif på nevneren: 0/0 er NaN, og en NaN sklir gjennom
+            -- «is null» og havner i figuren som et hull ingen sjekk fanget.
+            k.kvinner / nullif(cast(b.lonnstakere as double), 0) as kvinneandel,
+
+            -- Kildens 0 betyr «ingen å regne over». Se docstringen til
+            -- clean.yrke_trekk_kvartal.
+            nullif(l.median_lonn, 0)                            as median_lonn,
+            nullif(l.reallonn, 0)                               as reallonn,
+            nullif(t.gjennomsnittsalder, 0)                     as gjennomsnittsalder,
+            nullif(t.avtalt_arbeidstid, 0)                      as avtalt_arbeidstid,
+
+            f.sykefravaer_pst                                   as sykefravaer_pst
+        from bestand b
+        join clean_styrk y on y.kode = b.yrke and y.nivaa = 4
+        join clean_styrk h on h.kode = substr(b.yrke, 1, 1)
+        left join kjonn k on k.yrke = b.yrke and k.aar = b.aar
+        left join trekk t on t.yrke = b.yrke and t.aar = b.aar
+        left join lonn  l on l.yrke = b.yrke and l.aar = b.aar
+        left join clean_yrke_sykefravaer f on f.yrke = b.yrke and f.aar = b.aar
+        order by b.yrke, b.aar
     """)

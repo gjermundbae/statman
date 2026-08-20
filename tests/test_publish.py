@@ -20,6 +20,7 @@ from statman.publish.article import (
     Chart,
     Figure,
     Findings,
+    Format,
     Guide,
     Layer,
     Mark,
@@ -29,6 +30,7 @@ from statman.publish.article import (
     Stat,
     Stats,
     Table,
+    Timeline,
 )
 
 KATALOG = """
@@ -640,6 +642,193 @@ def test_berøring_slår_av_hover_og_lar_trykket_styre() -> None:
     # Ingen figur skal registrere pointermove/pointerleave direkte forbi
     # filteret — da er berøring uhåndtert i nettopp den figuren.
     assert 'addEventListener("pointermove"' not in js.split("function paaPeker")[1].split("function paaPekerUt")[0][200:]
+
+    # Tidslinja er unntaket, og det er et annet slag interaksjon: håndtaket
+    # dras, det holdes ikke over. Et drag som ble filtrert bort på berøring
+    # ville ikke virket i det hele tatt på telefon — der hover ikke finnes,
+    # er draget den eneste måten å flytte det på. Sjekken gjelder derfor alt
+    # utenfor den funksjonen, som før.
+    foer, _, etter = js.partition("function lagTidslinje")
+    utenfor = foer + etter.partition("\n  /* ------")[2]
     for hendelse in ("pointermove", "pointerleave"):
-        direkte = js.count(f'addEventListener("{hendelse}"')
+        direkte = utenfor.count(f'addEventListener("{hendelse}"')
         assert direkte == 1, f"{hendelse} registreres {direkte} steder, ventet bare i hjelperen"
+
+# --------------------------------------------------------------------------
+# Tidslinje
+# --------------------------------------------------------------------------
+# En figur der leseren velger tidspunktet kan ikke få svarene ferdig
+# utregnet — det er for mange av dem. Analysen sier regelen i stedet, og
+# sjekkene her er de som holder regelen fra å bli meningsløs på veien.
+def lag_lag(**endringer) -> Layer:
+    grunn = dict(
+        key="lonn",
+        label="Median månedslønn",
+        legend=(("skala1", "under 40 000 kr"), ("skala2", "40 000 kr og over")),
+        rule="point",
+        edges=(40_000.0,),
+        format=Format(decimals=0, suffix=" kr"),
+        missing_label="ikke publisert",
+    )
+    grunn.update(endringer)
+    return Layer(**grunn)  # type: ignore[arg-type]
+
+
+def lag_tidsfigur(**endringer) -> Chart:
+    grunn = dict(
+        kind="treemap",
+        marks=(
+            Mark(label="Butikkmedarbeidere", group="Salgsyrker", size=9_000.0,
+                 note="9 000", series=((29_000.0, 42_120.0), (8_000.0, 9_000.0))),
+            Mark(label="Pantelånere mv.", group="Salgsyrker", size=800.0,
+                 note="800", series=((None, None), ())),
+        ),
+        fallback="fliser.png",
+        alt="Flisediagram",
+        layers=(
+            lag_lag(),
+            lag_lag(
+                key="vekst", label="Endring i antall",
+                legend=(("avvik1", "ned"), ("avvik5", "opp"),
+                        ("mangler", "ikke publisert")),
+                rule="change", edges=(0.0,),
+                format=Format(decimals=1, factor=100.0, suffix=" %", sign=True),
+                level_label="Lønnstakere", level_format=Format(),
+                floor=500.0, floor_label="ikke sammenlignbar",
+            ),
+        ),
+        layer_label="Farg flisene etter",
+        timeline=Timeline(labels=("2016", "2026"), label="Tidspunkt",
+                          note="Ett punkt per år.", from_point=0, to_point=1),
+        caption="Bildetekst",
+        source="Kilde: X",
+    )
+    grunn.update(endringer)
+    return Chart(**grunn)  # type: ignore[arg-type]
+
+
+def test_tidslinja_overlever_json(project: Path) -> None:
+    """Regelen, grensene, skrivemåten og seriene må bære gjennom fila."""
+    tilbake = Article.from_dict(
+        lag_artikkel(sections=(Section("Funn", (lag_tidsfigur(),)),)).to_dict()
+    )
+    ut = tilbake.charts()[0]
+    assert ut.timeline is not None
+    assert ut.timeline.labels == ("2016", "2026")
+    assert ut.timeline.from_point == 0 and ut.timeline.to_point == 1
+    vekst = ut.layers[1]
+    assert vekst.rule == "change"
+    assert vekst.edges == (0.0,)
+    assert vekst.floor == 500.0
+    assert vekst.floor_label == "ikke sammenlignbar"
+    # Et format der alt står på standardverdi skrives kompakt som {}, og er
+    # fortsatt et format — ikke fraværet av ett.
+    assert vekst.level_format == Format()
+    assert ut.marks[0].series == ((29_000.0, 42_120.0), (8_000.0, 9_000.0))
+    # De to måtene et tall kan mangle på er ikke det samme, og skal ikke
+    # smelte sammen i fila: null er et hull, tom serie er ingen måling.
+    assert ut.marks[1].series == ((None, None), ())
+
+
+def test_tidslinje_uten_lag_stopper(katalog: Path) -> None:
+    graf = lag_tidsfigur(layers=(), layer_label="",
+                         marks=(Mark(label="A", size=1.0, series=()),))
+    with pytest.raises(ValueError, match="tidslinje uten fargelag"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_tidslinje_med_ett_punkt_stopper(katalog: Path) -> None:
+    """Ett punkt er ikke en tidslinje, det er et tidspunkt."""
+    graf = lag_tidsfigur(timeline=Timeline(labels=("2026",)))
+    with pytest.raises(ValueError, match="trenger minst to"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_tidslinje_som_slutter_for_den_begynner_stopper(katalog: Path) -> None:
+    graf = lag_tidsfigur(
+        timeline=Timeline(labels=("2016", "2026"), from_point=1, to_point=0)
+    )
+    with pytest.raises(ValueError, match="starter etter at den slutter"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_haandtak_utenfor_punktene_stopper(katalog: Path) -> None:
+    graf = lag_tidsfigur(timeline=Timeline(labels=("2016", "2026"), to_point=7))
+    with pytest.raises(ValueError, match="to_point står på 7"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_serie_som_ikke_folger_punktene_stopper(katalog: Path) -> None:
+    """Ellers farges flisa etter et annet år enn det håndtaket står på."""
+    graf = lag_tidsfigur(
+        marks=(Mark(label="Skjev", size=1.0, series=((1.0, 2.0, 3.0), (1.0, 2.0))),)
+    )
+    with pytest.raises(ValueError, match="annet antall målinger"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_merke_uten_serie_i_hvert_lag_stopper(katalog: Path) -> None:
+    graf = lag_tidsfigur(marks=(Mark(label="Halv", size=1.0, series=((1.0, 2.0),)),))
+    with pytest.raises(ValueError, match="annet antall serier"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_ukjent_regel_stopper(katalog: Path) -> None:
+    graf = lag_tidsfigur(layers=(lag_lag(rule="hopp"), lag_lag(key="b")))
+    with pytest.raises(ValueError, match="regelen 'hopp'"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_grenser_og_tegnforklaring_maa_stemme(katalog: Path) -> None:
+    """Tegnforklaringen *er* skalaen. Er antallet skjevt, viser figuren og
+    forklaringen hver sin inndeling — uten at noe ser galt ut."""
+    graf = lag_tidsfigur(layers=(lag_lag(edges=(10.0, 20.0)), lag_lag(key="b")))
+    with pytest.raises(ValueError, match="poster i tegnforklaringen"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_grenser_som_ikke_stiger_stopper(katalog: Path) -> None:
+    graf = lag_tidsfigur(
+        layers=(
+            lag_lag(edges=(20.0, 10.0),
+                    legend=(("skala1", "a"), ("skala2", "b"), ("skala3", "c"))),
+            lag_lag(key="b"),
+        )
+    )
+    with pytest.raises(ValueError, match="grenser som ikke stiger"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_lag_uten_skrivemaate_stopper(katalog: Path) -> None:
+    graf = lag_tidsfigur(layers=(lag_lag(format=None), lag_lag(key="b")))
+    with pytest.raises(ValueError, match="hvordan tallet skal skrives"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_lag_uten_ord_for_manglende_maaling_stopper(katalog: Path) -> None:
+    """Rendereren skal aldri finne på en formulering om hvorfor et tall mangler."""
+    graf = lag_tidsfigur(layers=(lag_lag(missing_label=""), lag_lag(key="b")))
+    with pytest.raises(ValueError, match="hva som skal stå der målingen mangler"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_nedre_grense_paa_et_punktlag_stopper(katalog: Path) -> None:
+    """En nedre grense gir bare mening der to målinger deles på hverandre."""
+    graf = lag_tidsfigur(
+        layers=(lag_lag(floor=500.0, floor_label="for lite"), lag_lag(key="b"))
+    )
+    with pytest.raises(ValueError, match="måler ikke en endring"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_rekkevidde_utenfor_punktene_stopper(katalog: Path) -> None:
+    graf = lag_tidsfigur(layers=(lag_lag(span=(0, 5)), lag_lag(key="b")))
+    with pytest.raises(ValueError, match="rekker fra 0 til 5"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()
+
+
+def test_serier_uten_tidslinje_stopper(katalog: Path) -> None:
+    """En serie uten tidslinje har ingenting å være indeksert etter."""
+    graf = lag_tidsfigur(timeline=None, layers=(), layer_label="")
+    with pytest.raises(ValueError, match="ingen tidslinje å lese dem langs"):
+        lag_artikkel(sections=(Section("Funn", (graf,)),)).validate()

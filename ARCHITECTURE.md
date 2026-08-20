@@ -36,7 +36,7 @@ gjør — og dermed på hva som ikke får skje i dem.
 | `mart` | Analyseklare tabeller, koblet på tvers | Parquet | hvert valg begrunnes der det tas |
 | `catalog` | Definisjon, enhet, kilde, forbehold, seriebrudd | YAML | ingen tall som kan telles |
 | `output` | Sakspakke: data, graf, notat, artikkelspesifikasjon | filer | forbeholdene følger tallene ut |
-| `publish` | Artikkel: én selvstendig side, og arkivet | HTML | ingenting regnes ut her |
+| `publish` | Artikkel: én selvstendig side, og arkivet | HTML | ingen vurdering tas her |
 
 `raw → clean` er mekanisk. `clean → mart` er der valgene tas. `catalog` er der
 det står hvorfor. Analysen leser fra `mart` og skriver til `output` — den går
@@ -191,6 +191,49 @@ Interaktivitet legges til der leseren er en av radene. Kommunesaken har 323
 kommuner med hvert sitt navn; en leser fra Ibestad skal kunne finne Ibestad.
 En figur som viser en *fordeling* og ikke identiteter — spaghettiplottene —
 har lite å hente på å bli klikkbar, og blir stående som PNG.
+
+### Tidslinja, og hva den gjorde med regelen
+
+Den samme grensa ble prøvd en gang til da flisediagrammet fikk en tidslinje.
+Fram til da hadde analysen skrevet ut hvilken farge hver flate skulle ha i
+hvert lag og hvilken tekst boblen skulle vise, og `graf.js` slo opp og tegnet.
+Regelen fra forrige avsnitt var oppfylt med god margin: sida gjorde ikke annet
+enn å mappe verdi til piksel.
+
+En dragbar tidslinje går ikke opp med det. Elleve årspunkter gir 55 fra/til-
+kombinasjoner per lag, og en forhåndsregnet tone og en ferdig setning for hver
+av dem gjør spesifikasjonen til en oppslagstabell på flere hundre kilobyte,
+der endringslagene alene fyller mesteparten.
+
+Så analysen sier regelen i stedet for svaret — hvilken serie laget måler, om
+det er nivået i ett punkt eller endringen mellom to, hvor grensene mellom
+trinnene går, hvor lite et yrke kan være før en prosent slutter å bety noe,
+hvor mange desimaler tallet tåler, og hva som skal stå når målingen mangler.
+Alt sammen står fortsatt i `LAG` i analysen. Det som skjer i nettleseren er en
+divisjon, en sammenligning mot tall som kom ferdig, og en avrunding til et
+antall som også kom ferdig. Regelen holder: sida teller ikke, den summerer
+ikke, og den velger ikke utvalg.
+
+Forskjellen fra de to feilene over er hva slags operasjon det er. Å aggregere
+er å velge et utvalg; å telle opp er å velge hva som teller. Begge er
+vurderinger med et forsvar bak seg, og et forsvar hører hjemme der det kan
+skrives ned. Å dele to målte tall på hverandre er ingen av delene — regelen om
+*hvilke* to og *hva* resultatet skal hete er fortsatt analysens.
+
+To ting følger av at grensen går her. Rangstripa, som er sortert på vekst og
+bærer opptalte tall i delelinja, følger *ikke* tidslinja: å la den gjøre det
+ville krevd både omsortering og opptelling i sida, og opptelling er nettopp
+det som ga 205 av 323. Og flisene ligger i ro. Flatene følger bestanden i det
+siste årspunktet, ikke i det leseren står på — en flate som puster med tida er
+vakrere å se på, men da kan man ikke følge ett yrke gjennom hverken lagene
+eller årene, og det er det figuren er til for.
+
+Selve punktene er også et valg som ble tatt i analysen. Serien fra SSB er
+kvartalsvis, men tidslinja har ett punkt per år, i samme kvartal. Det er ikke
+en forenkling for å spare plass: bestanden svinger systematisk gjennom året, og
+med fritt valgte kvartaler kan leseren stille inn en «endring» som i sin helhet
+er sesong. Hvert utsnitt tidslinja kan lage følger dermed nøyaktig den regelen
+saken selv følger.
 
 ### Fargelag
 
