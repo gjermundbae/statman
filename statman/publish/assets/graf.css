@@ -103,6 +103,12 @@
   }
 }
 
+/* Hvor bredt en figur sida tegner selv får bli i «full» bredde. Smalere enn
+   --full-bredde, som gjelder PNG-figurene: en tegnet figur har høyde etter
+   sideforholdet sitt, og en flate som er høyere enn vinduet kan ikke ses i
+   sin helhet uansett hvor mye plass den får. */
+:root { --graf-full-bredde: 76rem; }
+
 /* Panelet og tegnforklaringen settes inn av skriptet, som søsken til figuren.
    Uten dette ville de klemt seg inn i tekstspennet mens figuren står bredt. */
 @supports (grid-template-columns: subgrid) {
@@ -115,12 +121,22 @@
 }
 /* Panelet, tegnforklaringen og lagteksten hører til figuren og må stå på
    samme bredde som den. De er egne rutenettbarn, så de arver ikke taket
-   hennes — uten dette rant de ut i hele vinduet mens figuren sto midtstilt. */
+   hennes — uten dette rant de ut i hele vinduet mens figuren sto midtstilt.
+
+   Taket er smalere enn --full-bredde, og gjelder figuren selv også. En PNG
+   i full bredde er et bilde leseren ser på; et flisediagram er en flate hen
+   *leter i*, og på 90rem ble den 1440 × 927 piksler — høyere enn vinduet
+   den står i, så ingen så hele figuren uten å zoome ut. 76rem holder hele
+   figuren innenfor en vanlig skjerm. Skriften i den følger ikke med ned:
+   `flisemaal` regner den ut fra den rendrede bredden, så navnene er like
+   store som før — det er flisene som er blitt mindre, og dermed noen færre
+   av dem som får navnet sitt skrevet på seg. */
+.figur.graf.full,
 .graf-styring.full,
 .graf-lagtekst.full,
 .graf-tegn.full {
   width: 100%;
-  max-width: var(--full-bredde);
+  max-width: var(--graf-full-bredde);
   margin-inline: auto;
 }
 
@@ -233,18 +249,29 @@
    skrift under 600 piksler. Se `flisemaal` i graf.js. */
 /* Hvit tekst på flisen, med en tynn mørk kontur under. Konturen er der
    fordi flisene spenner fra nesten hvitt til mørkeblått i samme figur —
-   uten den forsvinner navnet på de lyseste. */
+   uten den forsvinner navnet på de lyseste.
+
+   Konturen er smal og mørk, ikke bred og grå. En bred kontur legger seg
+   *inn* i bokstaven — 2 enheter rundt en skrift på 11 er nesten en tredel
+   av stammen på hver side — og da tykner navnet til en klump der o-en og
+   e-en gror sammen. Bredden settes derfor av skriptet, i forhold til
+   skriftstørrelsen figuren faktisk får (`etiketthalo` i graf.js); verdien
+   her er bare et utgangspunkt for den som ser fila uten skriptet.
+   Vekten er 500 og ikke 600 av samme grunn: kontrasten mot flisa kommer
+   fra konturen, ikke fra fete stammer, og sporingen er løsnet et hakk så
+   nabobokstavene har et hår mellom seg å bli skilt på. */
 .flis-navn {
-  font-size: 11.5px; font-weight: 600; fill: #fff;
+  font-size: 11.5px; font-weight: 500; fill: #fff;
   pointer-events: none;
-  paint-order: stroke; stroke: rgba(0, 0, 0, 0.45);
-  stroke-width: 2px; stroke-linejoin: round;
+  letter-spacing: 0.02em;
+  paint-order: stroke; stroke: rgba(0, 0, 0, 0.62);
+  stroke-width: 1.2px; stroke-linejoin: round;
 }
 .flis-tall {
-  font-size: 10px; fill: #fff; fill-opacity: 0.85;
+  font-size: 10px; fill: #fff; fill-opacity: 0.9;
   pointer-events: none;
-  paint-order: stroke; stroke: rgba(0, 0, 0, 0.45);
-  stroke-width: 2px; stroke-linejoin: round;
+  paint-order: stroke; stroke: rgba(0, 0, 0, 0.62);
+  stroke-width: 1.1px; stroke-linejoin: round;
   font-variant-numeric: tabular-nums;
 }
 /* Gruppenavnet ligger over gruppa si, i sidas blekk — det er en overskrift

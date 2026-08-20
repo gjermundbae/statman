@@ -612,6 +612,12 @@ details .kilde-linje {
   }
 }
 
+/* Hvor bredt en figur sida tegner selv får bli i «full» bredde. Smalere enn
+   --full-bredde, som gjelder PNG-figurene: en tegnet figur har høyde etter
+   sideforholdet sitt, og en flate som er høyere enn vinduet kan ikke ses i
+   sin helhet uansett hvor mye plass den får. */
+:root { --graf-full-bredde: 76rem; }
+
 /* Panelet og tegnforklaringen settes inn av skriptet, som søsken til figuren.
    Uten dette ville de klemt seg inn i tekstspennet mens figuren står bredt. */
 @supports (grid-template-columns: subgrid) {
@@ -624,12 +630,22 @@ details .kilde-linje {
 }
 /* Panelet, tegnforklaringen og lagteksten hører til figuren og må stå på
    samme bredde som den. De er egne rutenettbarn, så de arver ikke taket
-   hennes — uten dette rant de ut i hele vinduet mens figuren sto midtstilt. */
+   hennes — uten dette rant de ut i hele vinduet mens figuren sto midtstilt.
+
+   Taket er smalere enn --full-bredde, og gjelder figuren selv også. En PNG
+   i full bredde er et bilde leseren ser på; et flisediagram er en flate hen
+   *leter i*, og på 90rem ble den 1440 × 927 piksler — høyere enn vinduet
+   den står i, så ingen så hele figuren uten å zoome ut. 76rem holder hele
+   figuren innenfor en vanlig skjerm. Skriften i den følger ikke med ned:
+   `flisemaal` regner den ut fra den rendrede bredden, så navnene er like
+   store som før — det er flisene som er blitt mindre, og dermed noen færre
+   av dem som får navnet sitt skrevet på seg. */
+.figur.graf.full,
 .graf-styring.full,
 .graf-lagtekst.full,
 .graf-tegn.full {
   width: 100%;
-  max-width: var(--full-bredde);
+  max-width: var(--graf-full-bredde);
   margin-inline: auto;
 }
 
@@ -742,18 +758,29 @@ details .kilde-linje {
    skrift under 600 piksler. Se `flisemaal` i graf.js. */
 /* Hvit tekst på flisen, med en tynn mørk kontur under. Konturen er der
    fordi flisene spenner fra nesten hvitt til mørkeblått i samme figur —
-   uten den forsvinner navnet på de lyseste. */
+   uten den forsvinner navnet på de lyseste.
+
+   Konturen er smal og mørk, ikke bred og grå. En bred kontur legger seg
+   *inn* i bokstaven — 2 enheter rundt en skrift på 11 er nesten en tredel
+   av stammen på hver side — og da tykner navnet til en klump der o-en og
+   e-en gror sammen. Bredden settes derfor av skriptet, i forhold til
+   skriftstørrelsen figuren faktisk får (`etiketthalo` i graf.js); verdien
+   her er bare et utgangspunkt for den som ser fila uten skriptet.
+   Vekten er 500 og ikke 600 av samme grunn: kontrasten mot flisa kommer
+   fra konturen, ikke fra fete stammer, og sporingen er løsnet et hakk så
+   nabobokstavene har et hår mellom seg å bli skilt på. */
 .flis-navn {
-  font-size: 11.5px; font-weight: 600; fill: #fff;
+  font-size: 11.5px; font-weight: 500; fill: #fff;
   pointer-events: none;
-  paint-order: stroke; stroke: rgba(0, 0, 0, 0.45);
-  stroke-width: 2px; stroke-linejoin: round;
+  letter-spacing: 0.02em;
+  paint-order: stroke; stroke: rgba(0, 0, 0, 0.62);
+  stroke-width: 1.2px; stroke-linejoin: round;
 }
 .flis-tall {
-  font-size: 10px; fill: #fff; fill-opacity: 0.85;
+  font-size: 10px; fill: #fff; fill-opacity: 0.9;
   pointer-events: none;
-  paint-order: stroke; stroke: rgba(0, 0, 0, 0.45);
-  stroke-width: 2px; stroke-linejoin: round;
+  paint-order: stroke; stroke: rgba(0, 0, 0, 0.62);
+  stroke-width: 1.1px; stroke-linejoin: round;
   font-variant-numeric: tabular-nums;
 }
 /* Gruppenavnet ligger over gruppa si, i sidas blekk — det er en overskrift
@@ -1789,20 +1816,45 @@ details .kilde-linje {
   // Skriftstørrelsene følger med, og de står her og ikke i CSS fordi
   // oppsettet trenger dem *før* noe er tegnet: hvor høy tittelstripa blir,
   // og om gruppenavnet i det hele tatt får plass, avgjøres av dem.
+  // Skriften oppgis i den *rendrede* størrelsen vi vil ha, og regnes om til
+  // viewBox-enheter etter hvor mye figuren faktisk skaleres. Da er en
+  // gruppeoverskrift 16 piksler på en 1440 piksler bred skjerm og 16 piksler
+  // på en telefon — i stedet for 16 og 4, som er det en fast enhetsstørrelse
+  // gir. Konsekvensen er at teksten tar *flere enheter* på en liten skjerm og
+  // dermed at færre flisenavn får plass, og det er riktig vei: et navn som
+  // ikke kan leses er ikke verdt flata det dekker.
   function flisemaal(bredde) {
-    if (bredde < 600) {
-      return { B: 760, H: 1010, gruppe: 24, navn: 20, tall: 17, tittel: 30 };
-    }
-    return { B: 1180, H: 760, gruppe: 13.5, navn: 11.5, tall: 10, tittel: 18 };
+    var staaende = bredde < 700;
+    var B = staaende ? 760 : 1180;
+    var enhet = B / Math.max(bredde, 1);
+    function px(maal) { return Math.round(maal * enhet * 10) / 10; }
+    return {
+      B: B, H: staaende ? 1010 : 760,
+      gruppe: px(16), navn: px(13.5), tall: px(11.5), tittel: px(21)
+    };
+  }
+
+  // Konturen under flisenavnene må stå i forhold til skriften, ikke til
+  // viewBox-en. Den kan ikke settes i CSS, for `stroke-width` i en figur med
+  // viewBox er i *enheter*, og enhetene per piksel skifter med figurbredden:
+  // en fast bredde på 2 gir en hårstrek på telefon og en klump på skjerm,
+  // der skriften er 11 enheter og konturen dermed nesten en tredel av
+  // stammen på hver side. 0,10 av skriftstørrelsen er målt til å være nok
+  // til å skille hvit skrift fra den lyseste flisa uten å tykne den.
+  function etiketthalo(skrift) {
+    return Math.round(skrift * 0.10 * 100) / 100 + "px";
   }
 
   function tegnFliser(spek, vert, boble, g) {
     // Større viewBox enn de andre figurene, med samme sideforhold. Skriften
     // er 11 piksler i *viewBox*-enheter, så et grovere rutenett gir relativt
     // mindre tekst og dermed navn på langt flere fliser. 860 enheter ga navn
-    // på seks av fire hundre; 1180 gir det på rundt tjuefem. Prisen er at
-    // figuren tåler mindre nedskalering før teksten blir liten — den er
-    // «full» bredde nettopp derfor, og PNG-en er der for resten.
+    // på seks av fire hundre; 1180 gir det på seks til ni, alt etter hvor
+    // bred figuren faktisk blir. Prisen er at figuren tåler mindre
+    // nedskalering før teksten blir liten — den er «full» bredde nettopp
+    // derfor, og PNG-en er der for resten. Navnene er uansett ikke måten
+    // figuren leses på: de er der for å gi et par holdepunkter i flaten,
+    // og hvert enkelt yrke finner leseren i nedtrekket eller ved å peke.
     var maal = flisemaal(vert.getBoundingClientRect().width);
     var B = maal.B, H = maal.H, luft = 3, tittelhoyde = maal.tittel;
     var s = el("svg", {
@@ -1897,19 +1949,24 @@ details .kilde-linje {
     s._etiketter = function () {
       tekster.replaceChildren();
       spek.marks.forEach(function (m) {
-        if (!m._el || m._b < maal.navn * 2.6 || m._h < maal.navn * 1.3) return;
+        if (!m._el || m._b < maal.navn * 2.6 || m._h < maal.navn * 1.35) return;
         var plass = m._b - 7;
         var navn = txt(el("text", {
-          class: "flis-navn", x: m._x + 4, y: m._y + maal.navn * 1.09
+          class: "flis-navn", x: m._x + 4, y: m._y + maal.navn * 1.05
         }), m.label);
         navn.style.fontSize = maal.navn + "px";
+        navn.style.strokeWidth = etiketthalo(maal.navn);
         tekster.appendChild(navn);
         if (navn.getBBox().width > plass) { navn.remove(); return; }
-        if (m._h < maal.navn * 2.7 || !m.note) return;
+        // Tallet står en drøy linje under navnet. Avstanden er 1,35 ganger
+        // navnets skrift og ikke 1,08: to hvite linjer med kontur som ligger
+        // tettere enn det, leses som én tykk strek med tall i.
+        if (m._h < maal.navn * 2.95 || !m.note) return;
         var tall = txt(el("text", {
-          class: "flis-tall", x: m._x + 4, y: m._y + maal.navn * 2.17
+          class: "flis-tall", x: m._x + 4, y: m._y + maal.navn * 2.4
         }), m.note);
         tall.style.fontSize = maal.tall + "px";
+        tall.style.strokeWidth = etiketthalo(maal.tall);
         tekster.appendChild(tall);
         if (tall.getBBox().width > plass) tall.remove();
       });

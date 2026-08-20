@@ -813,13 +813,27 @@
     };
   }
 
+  // Konturen under flisenavnene må stå i forhold til skriften, ikke til
+  // viewBox-en. Den kan ikke settes i CSS, for `stroke-width` i en figur med
+  // viewBox er i *enheter*, og enhetene per piksel skifter med figurbredden:
+  // en fast bredde på 2 gir en hårstrek på telefon og en klump på skjerm,
+  // der skriften er 11 enheter og konturen dermed nesten en tredel av
+  // stammen på hver side. 0,10 av skriftstørrelsen er målt til å være nok
+  // til å skille hvit skrift fra den lyseste flisa uten å tykne den.
+  function etiketthalo(skrift) {
+    return Math.round(skrift * 0.10 * 100) / 100 + "px";
+  }
+
   function tegnFliser(spek, vert, boble, g) {
     // Større viewBox enn de andre figurene, med samme sideforhold. Skriften
     // er 11 piksler i *viewBox*-enheter, så et grovere rutenett gir relativt
     // mindre tekst og dermed navn på langt flere fliser. 860 enheter ga navn
-    // på seks av fire hundre; 1180 gir det på rundt tjuefem. Prisen er at
-    // figuren tåler mindre nedskalering før teksten blir liten — den er
-    // «full» bredde nettopp derfor, og PNG-en er der for resten.
+    // på seks av fire hundre; 1180 gir det på seks til ni, alt etter hvor
+    // bred figuren faktisk blir. Prisen er at figuren tåler mindre
+    // nedskalering før teksten blir liten — den er «full» bredde nettopp
+    // derfor, og PNG-en er der for resten. Navnene er uansett ikke måten
+    // figuren leses på: de er der for å gi et par holdepunkter i flaten,
+    // og hvert enkelt yrke finner leseren i nedtrekket eller ved å peke.
     var maal = flisemaal(vert.getBoundingClientRect().width);
     var B = maal.B, H = maal.H, luft = 3, tittelhoyde = maal.tittel;
     var s = el("svg", {
@@ -914,19 +928,24 @@
     s._etiketter = function () {
       tekster.replaceChildren();
       spek.marks.forEach(function (m) {
-        if (!m._el || m._b < maal.navn * 2.6 || m._h < maal.navn * 1.3) return;
+        if (!m._el || m._b < maal.navn * 2.6 || m._h < maal.navn * 1.35) return;
         var plass = m._b - 7;
         var navn = txt(el("text", {
-          class: "flis-navn", x: m._x + 4, y: m._y + maal.navn * 1.09
+          class: "flis-navn", x: m._x + 4, y: m._y + maal.navn * 1.05
         }), m.label);
         navn.style.fontSize = maal.navn + "px";
+        navn.style.strokeWidth = etiketthalo(maal.navn);
         tekster.appendChild(navn);
         if (navn.getBBox().width > plass) { navn.remove(); return; }
-        if (m._h < maal.navn * 2.7 || !m.note) return;
+        // Tallet står en drøy linje under navnet. Avstanden er 1,35 ganger
+        // navnets skrift og ikke 1,08: to hvite linjer med kontur som ligger
+        // tettere enn det, leses som én tykk strek med tall i.
+        if (m._h < maal.navn * 2.95 || !m.note) return;
         var tall = txt(el("text", {
-          class: "flis-tall", x: m._x + 4, y: m._y + maal.navn * 2.17
+          class: "flis-tall", x: m._x + 4, y: m._y + maal.navn * 2.4
         }), m.note);
         tall.style.fontSize = maal.tall + "px";
+        tall.style.strokeWidth = etiketthalo(maal.tall);
         tekster.appendChild(tall);
         if (tall.getBBox().width > plass) tall.remove();
       });
