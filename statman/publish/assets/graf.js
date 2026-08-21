@@ -1160,7 +1160,7 @@
     var enhet = B / Math.max(bredde, 1);
     function px(maal) { return Math.round(maal * enhet * 10) / 10; }
     return {
-      B: B, H: staaende ? 1010 : 760,
+      B: B, H: staaende ? 1010 : 660,
       gruppe: px(16), navn: px(13.5), tall: px(11.5), tittel: px(21)
     };
   }
@@ -1481,23 +1481,6 @@
         oppdater(fra, til);
       });
     }
-    if (kanLag) {
-      boks.appendChild(lagLagvelger(spek, bytt));
-      if (tidslinje) boks.appendChild(tidslinje);
-    }
-    if (!spek.picker) return boks;
-
-    var id = "graf-velg-" + Math.random().toString(36).slice(2, 8);
-    var felt = document.createElement("div");
-    var etikett = document.createElement("label");
-    etikett.htmlFor = id;
-    felt.appendChild(txt(etikett, spek.picker));
-
-    var velger = document.createElement("select");
-    velger.id = id;
-    var alle = document.createElement("option");
-    alle.value = "";
-    velger.appendChild(txt(alle, "Ingen framhevet"));
 
     // Gruppert på det merkene er gruppert på, og sortert på norsk — en liste
     // på 323 navn er ubrukelig i tilfeldig rekkefølge. Alternativene bygges
@@ -1505,27 +1488,12 @@
     // er en avgrensning, ikke flere kommuner å velge mellom.
     var bolker = {};
     spek.marks.forEach(function (m) { (bolker[m.group] || (bolker[m.group] = [])).push(m); });
-    Object.keys(bolker).sort(function (a, b) { return a.localeCompare(b, "nb"); })
-      .forEach(function (navn) {
-        var mål = velger;
-        if (navn) {
-          mål = document.createElement("optgroup");
-          mål.label = navn;
-          velger.appendChild(mål);
-        }
-        bolker[navn].slice().sort(function (a, b) {
-          return a.label.localeCompare(b.label, "nb");
-        }).forEach(function (m) {
-          var o = document.createElement("option");
-          o.value = m.label;
-          mål.appendChild(txt(o, m.note ? m.label + "  " + m.note : m.label));
-        });
-      });
-    felt.appendChild(velger);
-    boks.appendChild(felt);
+    var id = spek.picker ? "graf-velg-" + Math.random().toString(36).slice(2, 8) : "";
 
+    // Avgrensingen står over fargevelgeren: leseren snevrer inn hvilke
+    // flater som er med, før hen velger hva fargen skal vise blant dem.
     var filterVelger = null;
-    if (spek.group_label) {
+    if (spek.picker && spek.group_label) {
       var fid = id + "-f";
       var ffelt = document.createElement("div");
       var fetikett = document.createElement("label");
@@ -1547,6 +1515,42 @@
       boks.appendChild(ffelt);
       filterVelger.addEventListener("change", function () { filtrer(g, filterVelger.value); });
     }
+
+    if (kanLag) {
+      boks.appendChild(lagLagvelger(spek, bytt));
+      if (tidslinje) boks.appendChild(tidslinje);
+    }
+    if (!spek.picker) return boks;
+
+    var felt = document.createElement("div");
+    var etikett = document.createElement("label");
+    etikett.htmlFor = id;
+    felt.appendChild(txt(etikett, spek.picker));
+
+    var velger = document.createElement("select");
+    velger.id = id;
+    var alle = document.createElement("option");
+    alle.value = "";
+    velger.appendChild(txt(alle, "Ingen framhevet"));
+
+    Object.keys(bolker).sort(function (a, b) { return a.localeCompare(b, "nb"); })
+      .forEach(function (navn) {
+        var mål = velger;
+        if (navn) {
+          mål = document.createElement("optgroup");
+          mål.label = navn;
+          velger.appendChild(mål);
+        }
+        bolker[navn].slice().sort(function (a, b) {
+          return a.label.localeCompare(b.label, "nb");
+        }).forEach(function (m) {
+          var o = document.createElement("option");
+          o.value = m.label;
+          mål.appendChild(txt(o, m.note ? m.label + "  " + m.note : m.label));
+        });
+      });
+    felt.appendChild(velger);
+    boks.appendChild(felt);
 
     var nullstill = document.createElement("button");
     nullstill.type = "button";
