@@ -98,9 +98,6 @@ METRICS: Final[tuple[str, ...]] = (
     "yrke_reallonn_vekst",
 )
 
-# Hvor mange yrker som navngis i topp- og bunnlista.
-N_TOPP: Final[int] = 18
-
 LENKE: Final[str] = "yrke"
 
 # Reallønnsfiguren har hovedgrupper som merker, ikke yrker. Egen
@@ -825,51 +822,6 @@ def _plot_fliser(df: pl.DataFrame, path: Path, periode: str) -> Path:
     return path
 
 
-def _plot_topp_bunn(sml: pl.DataFrame, path: Path, periode: str) -> Path:
-    """Topp og bunn på tiårsvekst. Bare sammenlignbare yrker."""
-    topp = sml.sort("vekst_pst", descending=True).head(N_TOPP)
-    bunn = sml.sort("vekst_pst").head(N_TOPP).sort("vekst_pst", descending=True)
-
-    fig, axes = plt.subplots(1, 2, figsize=(14, 8))
-    for ax, del_df, tittel in (
-        (axes[0], topp, f"Størst vekst — topp {N_TOPP}"),
-        (axes[1], bunn, f"Størst nedgang — bunn {N_TOPP}"),
-    ):
-        verdier = del_df["vekst_pst"].to_list()
-        posisjoner = list(range(len(verdier)))
-        farger = [FARGE_VEKST if v >= 0 else FARGE_FALL for v in verdier]
-        ax.barh(posisjoner, verdier, color=farger, height=0.72)
-        ax.set_yticks(posisjoner, del_df["yrke_navn"].to_list(), fontsize=8.5)
-        ax.invert_yaxis()
-        ax.set_title(tittel, loc="left", fontsize=11)
-        ax.axvline(0, color="0.3", linewidth=0.8)
-        ax.grid(True, axis="x", alpha=0.25, linewidth=0.6)
-        ax.spines[["top", "right"]].set_visible(False)
-        ax.xaxis.set_major_formatter(lambda v, _: _pst(v, fortegn=False))
-
-        # Antallet hører hjemme rett ved siden av prosenten: 174 prosent av
-        # 1 100 er noe annet enn 20 prosent av 90 000.
-        spenn = max(abs(min(verdier)), abs(max(verdier))) or 1.0
-        for i, rad in enumerate(del_df.iter_rows(named=True)):
-            v = rad["vekst_pst"]
-            ax.text(v + (0.02 * spenn if v >= 0 else -0.02 * spenn), i,
-                    _antall(rad["lonnstakere"]), va="center",
-                    ha="left" if v >= 0 else "right", fontsize=7.5, color="0.35")
-        ax.set_xlim(min(0, min(verdier)) * 1.35, max(0, max(verdier)) * 1.4)
-
-    fig.suptitle(f"Yrkene som vokste og krympet mest, {periode}",
-                 x=0.01, ha="left", fontsize=15, fontweight="bold")
-    fig.text(0.01, 0.005,
-             f"Kilde: SSB tabell {TABELL}. Tall ved siden av søylene er antall "
-             f"lønnstakere i dag. Bare yrker med minst {_antall(MINSTE_YRKE)} "
-             "lønnstakere i begge ender, og utenom militære yrker og uoppgitt.",
-             fontsize=8, color="0.35")
-    fig.tight_layout(rect=(0, 0.02, 1, 0.95))
-    fig.savefig(path, dpi=144)
-    plt.close(fig)
-    return path
-
-
 def _plot_hovedgrupper(
     gruppe: pl.DataFrame, path: Path, periode: str, kvartal: str
 ) -> Path:
@@ -1371,57 +1323,11 @@ def _graf_fliser(df: pl.DataFrame, aar_df: pl.DataFrame, kilde: str) -> publish.
         "bytter lag og når du drar i tidslinja, så det samme yrket står på "
         "samme sted uansett hva fargen viser. Dra i håndtakene for å flytte "
         "målepunktet; lagene som måler en endring har ett håndtak i hver ende "
-        "av perioden. Velg et yrke i nedtrekket for å finne det igjen i alle "
-        "figurene på sida.",
-        source=kilde,
-    )
-
-
-def _graf_rangstripe(sml: pl.DataFrame, kilde: str) -> publish.Chart:
-    """Alle sammenlignbare yrker på én linje, rangert på tiårsvekst."""
-    df = sml.sort("vekst_pst", descending=True)
-    antall = df.height
-    vokste = df.filter(pl.col("vekst_pst") > 0).height
-    falt = df.filter(pl.col("vekst_pst") < 0).height
-
-    merker = tuple(
-        publish.Mark(
-            label=rad["yrke_navn"],
-            group=rad["hovedgruppe_navn"],
-            tone="vekst" if rad["vekst_pst"] > 0 else "fall",
-            values=(
-                publish.Readout("Endring", _pst(rad["vekst_pst"]),
-                                "vekst" if rad["vekst_pst"] > 0 else "fall"),
-                publish.Readout("Lønnstakere nå", _antall(rad["lonnstakere"])),
-                publish.Readout("For ti år siden", _antall(rad["lonnstakere_start"])),
-            ),
-            note=f"nr. {i + 1} av {antall}",
-        )
-        for i, rad in enumerate(df.iter_rows(named=True))
-    )
-    topp, bunn = df.row(0, named=True), df.row(-1, named=True)
-    return publish.Chart(
-        kind="strip",
-        marks=merker,
-        fallback="vekst_topp_bunn.png",
-        alt=f"To liggende søylediagram: de {N_TOPP} yrkene som vokste mest og "
-        f"de {N_TOPP} som krympet mest, i prosent.",
-        x=publish.Axis(
-            lo=0, hi=antall - 1, ticks=(0, antall - 1),
-            tick_labels=(
-                f"{topp['yrke_navn']} {_pst(topp['vekst_pst'])}",
-                f"{bunn['yrke_navn']} {_pst(bunn['vekst_pst'])}",
-            ),
-        ),
-        guides=(publish.Guide("x", vokste - 0.5, (f"{vokste} vokste", f"{falt} krympet")),),
-        link=LENKE,
-        caption=f"Alle {antall} sammenlignbare yrkene på én linje, rangert på "
-        "endring over ti år. Det valgte yrket får en nål her også, så du ser "
-        "med én gang om det er et ytterpunkt eller midt i flokken. Uten "
-        f"JavaScript står de {N_TOPP} øverste og {N_TOPP} nederste med navn i "
-        "stedet, som søyler — og der er antallet skrevet ved siden av "
-        "prosenten med vilje, siden prosentvekst alene setter små yrker både "
-        "til topps og til bunns.",
+        "av perioden. Linja under flisene rangerer alle yrkene som har en "
+        "måling i det valgte laget, størst til venstre — den regnes om for "
+        "hvert lag- og tidsbytte, så det alltid er den valgte målingen som "
+        "avgjør rekkefølgen. Velg et yrke i nedtrekket for å finne det igjen "
+        "i alle figurene på sida, deriblant rangeringslinja.",
         source=kilde,
     )
 
@@ -1621,7 +1527,6 @@ def artikkel(
     ti_aar = publish.Section(
         "Ti år",
         (
-            _graf_rangstripe(sml, kilde),
             publish.Figure(
                 "hovedgrupper_tid.png",
                 alt="Ti linjer, én per hovedgruppe, indeksert til 100 ved "
@@ -1920,7 +1825,6 @@ def artikkel(
         files=(
             (f"{SLUG}.csv", "alle 407 yrker, alle kolonner"),
             ("fliser.png", "flisediagrammet, farget etter medianlønn"),
-            ("vekst_topp_bunn.png", f"topp og bunn {N_TOPP} på tiårsvekst"),
             ("hovedgrupper_tid.png", "de ti hovedgruppene kvartal for kvartal"),
             ("reallonn.png", "reallønnsindeks per hovedgruppe"),
             ("lonn_kjonn.png", "kvinneandel mot medianlønn"),
@@ -1974,7 +1878,6 @@ def main() -> list[Path]:
 
     figurer = [
         _plot_fliser(df, target / "fliser.png", periode),
-        _plot_topp_bunn(sml, target / "vekst_topp_bunn.png", periode),
         _plot_hovedgrupper(gruppe, target / "hovedgrupper_tid.png", periode,
                            df["kvartal_slutt"][0]),
         _plot_reallonn(reallonn, target / "reallonn.png", periode,

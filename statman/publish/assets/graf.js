@@ -1343,6 +1343,139 @@
       velg(g, m && m.label !== g.valgt ? m.label : null);
     });
 
+    // Rangeringslinja under flisene: alle yrkene med en måling i det valgte
+    // laget, sortert på verdien — størst til venstre, av samme grunn som
+    // trinnene i tegnforklaringen leses i den retningen. Den regnes på nytt
+    // for hvert lag- og tidsbytte i stedet for å være én fast rangering, så
+    // spørsmålet «hvem er størst og minst i *dette* målet» kan stilles til
+    // alle elleve, ikke bare det ene stripefiguren pleide å svare på.
+    var RB = 860, RH = 100, rkant = 8, rtopp = 34, rhoyde = 34;
+    var rangSvg = el("svg", {
+      viewBox: "0 0 " + RB + " " + RH, class: "graf-rang", role: "img"
+    });
+    var rangLinjer = el("g");
+    var rangGuide = el("g");
+    rangSvg.appendChild(rangLinjer);
+    rangSvg.appendChild(rangGuide);
+    var rangNaal = el("line", {
+      y1: rtopp - 6, y2: rtopp + rhoyde + 6, x1: 0, x2: 0,
+      stroke: "var(--blekk)", "stroke-width": 2, opacity: 0
+    });
+    var rangLapp = txt(el("text", {
+      class: "etikett", y: rtopp - 13, "text-anchor": "middle", opacity: 0
+    }), "");
+    rangSvg.appendChild(rangNaal);
+    rangSvg.appendChild(rangLapp);
+    var rangFlate = el("rect", { x: 0, y: 0, width: RB, height: RH, fill: "transparent" });
+    rangSvg.appendChild(rangFlate);
+    vert.appendChild(rangSvg);
+
+    var rangRader = [];   // {m, v, x}, i sortert rekkefølge for laget som står nå
+    var rangX = null;
+
+    function tegnRang(i, fra, til) {
+      var lag2 = spek.layers[i];
+      rangLinjer.replaceChildren();
+      rangGuide.replaceChildren();
+      rangNaal.setAttribute("opacity", 0);
+      rangLapp.setAttribute("opacity", 0);
+      rangRader = [];
+      rangX = null;
+      if (!lag2) return;
+      spek.marks.forEach(function (m) {
+        var res = maaling(lag2, m, i, fra, til);
+        if (res.v !== null) rangRader.push({ m: m, v: res.v });
+      });
+      rangRader.sort(function (a, b) { return b.v - a.v; });
+      var n = rangRader.length;
+      rangSvg.setAttribute(
+        "aria-label",
+        "Rangering av " + n + " yrker etter " + lag2.label.toLowerCase() + "."
+      );
+      if (!n) return;
+      rangX = skala(0, n - 1, rkant, RB - rkant);
+      rangRader.forEach(function (r, idx) {
+        r.x = rangX(idx);
+        var linje = el("line", {
+          class: "tikk", x1: r.x, x2: r.x, y1: rtopp, y2: rtopp + rhoyde,
+          stroke: flatefyll(trinn(lag2, r.v)), "stroke-width": 1.6, "stroke-opacity": 0.6
+        });
+        r.m._rangEl = linje;
+        rangLinjer.appendChild(linje);
+      });
+
+      // Skillet mellom opp og ned gir bare mening på et endringslag — et
+      // punktlag (lønn, alder …) har ikke en «null» å dele seg om.
+      if (lag2.rule === "change") {
+        var siste = -1;
+        for (var k = 0; k < n; k++) {
+          if (rangRader[k].v > 0) siste = k; else break;
+        }
+        var gx = siste < 0 ? rkant : siste === n - 1 ? RB - rkant
+          : (rangRader[siste].x + rangRader[siste + 1].x) / 2;
+        rangGuide.appendChild(el("line", {
+          x1: gx, x2: gx, y1: rtopp - 8, y2: rtopp + rhoyde + 8,
+          stroke: "var(--strek-mork)", "stroke-width": 1
+        }));
+        rangGuide.appendChild(txt(el("text", {
+          class: "merketall", x: gx - 6, y: rtopp - 13, "text-anchor": "end"
+        }), (siste + 1) + " opp"));
+        rangGuide.appendChild(txt(el("text", {
+          class: "merketall", x: gx + 6, y: rtopp - 13
+        }), (n - siste - 1) + " ned"));
+      }
+
+      var forste = rangRader[0], sistemann = rangRader[n - 1];
+      rangGuide.appendChild(txt(el("text", {
+        class: "merketall", x: rkant, y: rtopp + rhoyde + 18
+      }), forste.m.label + " " + formater(lag2.format, forste.v)));
+      rangGuide.appendChild(txt(el("text", {
+        class: "merketall", x: RB - rkant, y: rtopp + rhoyde + 18, "text-anchor": "end"
+      }), sistemann.m.label + " " + formater(lag2.format, sistemann.v)));
+    }
+
+    function rangRadVed(ev) {
+      if (!rangX || !rangRader.length) return null;
+      var r = rangSvg.getBoundingClientRect();
+      var idx = Math.round(rangX.inv((ev.clientX - r.left) / (r.width / RB)));
+      return rangRader[Math.max(0, Math.min(rangRader.length - 1, idx))];
+    }
+    function rangVisVed(ev) {
+      var rad = rangRadVed(ev);
+      if (!rad) { visBoble(boble, vert, null); return null; }
+      var r = rangSvg.getBoundingClientRect(), k = r.width / RB;
+      visBoble(boble, vert, peket(rad.m), r.left + rad.x * k, r.top + rtopp * k);
+      return rad.m;
+    }
+    paaPeker(rangFlate, rangVisVed);
+    paaPekerUt(rangFlate, function () { visBoble(boble, vert, null); });
+    rangFlate.addEventListener("click", function (ev) {
+      var m = rangVisVed(ev);
+      velg(g, m && m.label !== g.valgt ? m.label : null);
+    });
+
+    // Markeringen tegnes på nytt her — den kan trigges av et lagbytte (linja
+    // er tegnet på nytt fra bunnen) eller av at leseren velger et annet yrke
+    // uten å bytte lag. Begge kaller denne, ikke to separate stier.
+    function rangMarker(valgt, filter) {
+      rangRader.forEach(function (r) {
+        r.m._rangEl.classList.toggle("valgt", r.m.label === valgt);
+        r.m._rangEl.classList.toggle("i-gruppe", !!filter && r.m.group === filter);
+      });
+      rangSvg.classList.toggle("dempet", !!valgt || !!filter);
+      var rad = valgt && rangRader.find(function (r) { return r.m.label === valgt; });
+      if (rad) {
+        rangNaal.setAttribute("x1", rad.x); rangNaal.setAttribute("x2", rad.x);
+        rangNaal.setAttribute("opacity", 1);
+        txt(rangLapp, rad.m.note ? rad.m.label + " · " + rad.m.note : rad.m.label);
+        rangLapp.setAttribute("x", Math.max(80, Math.min(RB - 80, rad.x)));
+        rangLapp.setAttribute("opacity", 1);
+      } else {
+        rangNaal.setAttribute("opacity", 0);
+        rangLapp.setAttribute("opacity", 0);
+      }
+    }
+
     // Lagbytte er bare en ny fylling per flis. Layouten ligger fast — den
     // følger bestanden i siste punkt og rører seg ikke når leseren drar i
     // tidslinja. Det er et valg: en flate som puster med tida ville vært
@@ -1368,6 +1501,11 @@
         }
         m._el.setAttribute("fill", flatefyll(tone));
       });
+      // Rangeringslinja er en ny tegning, ikke en omfarging — den bytter
+      // hvem som er med og i hvilken rekkefølge. Markeringen må derfor
+      // settes på nytt etter at den er tegnet, ikke bare la stå.
+      tegnRang(i, stilling.fra, stilling.til);
+      rangMarker(g.valgt, g.filter);
     };
     s._settLag(0);
 
@@ -1378,6 +1516,7 @@
         m._el.classList.toggle("i-gruppe", !!filter && m.group === filter);
       });
       s.classList.toggle("dempet", !!valgt || !!filter);
+      rangMarker(valgt, filter);
       var m = valgt && spek.marks.find(function (a) { return a.label === valgt && a._el; });
       if (m) {
         valgtramme.setAttribute("x", m._x); valgtramme.setAttribute("y", m._y);
