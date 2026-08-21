@@ -82,6 +82,11 @@
         // Feltene under styrer tidslinja. De er analysens regel, ikke
         // rendererens: grensene, ordene og presisjonen står i sakspakken.
         rule: l.rule || "",
+        // Endringslag regner enten forholdet mellom to punkter eller
+        // differansen — én gang valgt i analysen, ikke gjettet her.
+        // Fraværet av feltet betyr «forhold», som de første endringslagene
+        // alltid var.
+        relative: l.relative !== false,
         edges: l.edges || [],
         format: format(l.format),
         level_label: l.level_label || "",
@@ -243,13 +248,17 @@
 
     var a = s[klem(lag, fra)];
     if (a === null || a === undefined) return { v: null, ord: lag.missing_label };
-    // En endring fra ingenting er ikke en prosent, uansett hvor mange som kom til.
-    if (!(a > 0)) return { v: null, ord: lag.floor_label || lag.missing_label };
+    // En relativ endring fra ingenting er ikke en prosent, uansett hvor
+    // mange som kom til. En differanse har ikke det problemet — 0 til 3
+    // poeng er en differanse på 3, ikke en udefinert brøk.
+    if (lag.relative && !(a > 0)) {
+      return { v: null, ord: lag.floor_label || lag.missing_label };
+    }
     // Grensen prøves mot begge endene: hvilke yrker som er små endrer seg.
     if (lag.floor !== null && (a < lag.floor || b < lag.floor)) {
       return { v: null, ord: lag.floor_label };
     }
-    return { v: b / a - 1, ord: "" };
+    return { v: lag.relative ? b / a - 1 : b - a, ord: "" };
   }
 
   // Nivået i det ene punktet, uavhengig av om laget måler nivå eller endring.
@@ -1516,41 +1525,47 @@
       filterVelger.addEventListener("change", function () { filtrer(g, filterVelger.value); });
     }
 
+    // Yrkevelgeren står ved siden av avgrensingen, begge over fargevelgeren
+    // — de to snevrer inn hva figuren viser, fargevelgeren sier bare hva
+    // fargen betyr.
+    var velger = null;
+    if (spek.picker) {
+      var felt = document.createElement("div");
+      var etikett = document.createElement("label");
+      etikett.htmlFor = id;
+      felt.appendChild(txt(etikett, spek.picker));
+
+      velger = document.createElement("select");
+      velger.id = id;
+      var alle = document.createElement("option");
+      alle.value = "";
+      velger.appendChild(txt(alle, "Ingen framhevet"));
+
+      Object.keys(bolker).sort(function (a, b) { return a.localeCompare(b, "nb"); })
+        .forEach(function (navn) {
+          var mål = velger;
+          if (navn) {
+            mål = document.createElement("optgroup");
+            mål.label = navn;
+            velger.appendChild(mål);
+          }
+          bolker[navn].slice().sort(function (a, b) {
+            return a.label.localeCompare(b.label, "nb");
+          }).forEach(function (m) {
+            var o = document.createElement("option");
+            o.value = m.label;
+            mål.appendChild(txt(o, m.note ? m.label + "  " + m.note : m.label));
+          });
+        });
+      felt.appendChild(velger);
+      boks.appendChild(felt);
+    }
+
     if (kanLag) {
       boks.appendChild(lagLagvelger(spek, bytt));
       if (tidslinje) boks.appendChild(tidslinje);
     }
     if (!spek.picker) return boks;
-
-    var felt = document.createElement("div");
-    var etikett = document.createElement("label");
-    etikett.htmlFor = id;
-    felt.appendChild(txt(etikett, spek.picker));
-
-    var velger = document.createElement("select");
-    velger.id = id;
-    var alle = document.createElement("option");
-    alle.value = "";
-    velger.appendChild(txt(alle, "Ingen framhevet"));
-
-    Object.keys(bolker).sort(function (a, b) { return a.localeCompare(b, "nb"); })
-      .forEach(function (navn) {
-        var mål = velger;
-        if (navn) {
-          mål = document.createElement("optgroup");
-          mål.label = navn;
-          velger.appendChild(mål);
-        }
-        bolker[navn].slice().sort(function (a, b) {
-          return a.label.localeCompare(b.label, "nb");
-        }).forEach(function (m) {
-          var o = document.createElement("option");
-          o.value = m.label;
-          mål.appendChild(txt(o, m.note ? m.label + "  " + m.note : m.label));
-        });
-      });
-    felt.appendChild(velger);
-    boks.appendChild(felt);
 
     var nullstill = document.createElement("button");
     nullstill.type = "button";

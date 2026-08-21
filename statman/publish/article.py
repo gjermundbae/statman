@@ -247,10 +247,19 @@ class Layer:
 
     ``rule`` sier hva som måles: ``"point"`` leser serien i det ene
     punktet leseren står på, ``"change"`` regner endringen mellom de to.
+    ``relative`` skiller de to måtene et endringslag kan lese den
+    endringen på: sann er forholdet (``b / a - 1``, en prosentvekst), usann
+    er differansen (``b - a``, prosentpoeng eller samme enhet som serien).
+    En andel skal vanligvis ha differansen — «opp 3 prosentpoeng» sier noe
+    en leser kan sjekke; «opp 12 prosent» av en andel er sant, men svarer
+    ikke spørsmålet leseren stiller. Standarden er sann, fordi de første
+    endringslagene i denne kodebasen alltid var forhold.
     ``floor`` er nedre grense for at en endring i det hele tatt skal
     vises — under et par hundre ansatte flytter én omorganisering
     prosenten mer enn arbeidsmarkedet gjør — og den prøves mot begge
-    endene, siden hvilke yrker som er små endrer seg over tid.
+    endene, siden hvilke yrker som er små endrer seg over tid. Et
+    forholdslag trenger ofte en gulv av den grunnen; en differanse
+    eksploderer ikke nær null og trenger sjeldnere en.
 
     ``span`` er ``(fra, til)`` inn i ``Timeline.labels`` og sier hvor
     langt laget rekker. Sykefraværet er årlig og ligger et år etter
@@ -268,6 +277,7 @@ class Layer:
     legend: tuple[tuple[str, str], ...] = ()
     caption: str = ""
     rule: str = ""
+    relative: bool = True
     edges: tuple[float, ...] = ()
     format: Format | None = None
     level_label: str = ""
@@ -948,6 +958,7 @@ def _chart_from_dict(data: dict[str, Any]) -> Chart:
             legend=tuple((str(t), str(s)) for t, s in rå.get("legend") or ()),
             caption=str(rå.get("caption", "")),
             rule=str(rå.get("rule", "")),
+            relative=bool(rå.get("relative", True)),
             edges=tuple(float(e) for e in rå.get("edges") or ()),
             format=formatering(rå.get("format")),
             level_label=str(rå.get("level_label", "")),

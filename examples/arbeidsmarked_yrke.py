@@ -10,11 +10,11 @@ Ekte tall fra SSB, hele veien fra API-kall til sakspakke. Kjeden er:
       -> output/arbeidsmarked_yrke/     (sakspakke)
       -> statman publish arbeidsmarked_yrke  -> docs/   (artikkel)
 
-Saken er en flisefigur over 407 yrker, med ti lag å farge den etter og en
-tidslinje å dra i. Forbildet er Andrej Karpathys `karpathy.ai/jobs`, som
+Saken er en flisefigur over 407 yrker, med elleve lag å farge den etter og
+en tidslinje å dra i. Forbildet er Andrej Karpathys `karpathy.ai/jobs`, som
 gjør det samme for USA — men der fire lag er BLS' *framskrivinger* og en
-språkmodells anslag på hvor utsatt yrket er for KI, er alle ti lagene her
-målt. Det er ikke en dyd i seg selv; det er bare det norske datagrunnlaget
+språkmodells anslag på hvor utsatt yrket er for KI, er alle elleve lagene
+her målt. Det er ikke en dyd i seg selv; det er bare det norske datagrunnlaget
 som tillater det. SSB publiserer lønnstakere per fireside yrke hvert kvartal
 tilbake til 2016, og da trenger man ikke gjette hva teknologien vil gjøre med
 yrkene. Man kan se hva den allerede gjorde — og med tidslinja kan leseren se
@@ -359,9 +359,17 @@ class Lag(NamedTuple):
 
     ``regel`` skiller de to slagene lag fra hverandre. Et punktlag leser
     serien i det ene punktet leseren står på; et endringslag regner
-    forholdet mellom to. Forskjellen er ikke bare hvor mange håndtak
-    skinna får — den er hva tallet betyr, og derfor hva som kan gjøre det
-    meningsløst. ``gulv`` finnes bare på endringslag, av den grunnen.
+    forholdet eller differansen mellom to. Forskjellen er ikke bare hvor
+    mange håndtak skinna får — den er hva tallet betyr, og derfor hva som
+    kan gjøre det meningsløst. ``gulv`` finnes bare på endringslag, av den
+    grunnen — og bare på forholdslag i praksis, siden en differanse ikke
+    eksploderer nær null.
+
+    ``relativ`` skiller forholdet fra differansen på et endringslag: sann
+    (standarden) gir «opp 12 %», usann gir «opp 3 poeng» eller «opp 1,4 år»
+    — samme enhet som serien selv. En andel eller en rate skal som regel ha
+    differansen; en telling (lønnstakere) skal ha forholdet, siden en
+    differanse i antall ikke sier noe uten å vite hvor stort yrket var.
     """
 
     key: str
@@ -379,6 +387,7 @@ class Lag(NamedTuple):
     gulv: float | None = None
     mangler_ord: str = "ikke publisert"
     under_ord: str = ""
+    relativ: bool = True
 
 
 # Skrivemåtene, én gang hver. De speiler formatfunksjonene over — _kr, _pst,
@@ -392,6 +401,15 @@ FMT_ANDEL = publish.Format(decimals=1, factor=100.0, suffix=" %")
 FMT_PROSENT = publish.Format(decimals=1, suffix=" %")
 FMT_AAR = publish.Format(decimals=1, suffix=" år")
 FMT_TIMER = publish.Format(decimals=1, suffix=" t")
+# Prosentpoeng, ikke prosent: differansen mellom to andeler. Kvinneandelen
+# leses fra en brøk (0–1) og trenger factor=100; sykefraværet kommer
+# allerede i prosentpoeng fra kilden og trenger ingen.
+FMT_POENG_ANDEL = publish.Format(decimals=1, factor=100.0, suffix=" poeng", sign=True)
+FMT_POENG_PST = publish.Format(decimals=1, suffix=" poeng", sign=True)
+# Differanse i samme enhet som nivålaget, ikke prosent av den: et yrke som
+# ble 3 år eldre leses som «+3,0 år», ikke som en prosent av snittalderen.
+FMT_AAR_ENDRING = publish.Format(decimals=1, suffix=" år", sign=True)
+FMT_TIMER_ENDRING = publish.Format(decimals=1, suffix=" t", sign=True)
 
 
 def _skriv(fmt: publish.Format, verdi: float) -> str:
@@ -501,21 +519,19 @@ LAG: Final[tuple[Lag, ...]] = (
         kolonne="kvinneandel",
         serie="kvinneandel",
         regel="change",
+        relativ=False,
         roller=("avvik1", "avvik2", "avvik3", "avvik4", "avvik5"),
-        grenser=(-0.10, 0.0, 0.10, 0.30),
+        grenser=(-0.03, -0.01, 0.01, 0.03),
         tekster=(
-            "ned over 10 %", "ned 0–10 %", "opp 0–10 %",
-            "opp 10–30 %", "opp over 30 %",
+            "ned over 3 poeng", "ned 1–3 poeng", "omtrent uendret",
+            "opp 1–3 poeng", "opp over 3 poeng",
         ),
-        format=FMT_ENDRING,
-        gulv=0.01,
-        under_ord="for få av det ene kjønnet til å regne endring",
-        caption="Relativ endring i kvinneandelen mellom de to punktene du har "
-        "satt — et yrke som gikk fra 20 til 30 prosent kvinner får +50 %, ikke "
-        "+10 prosentpoeng. Yrker med under 1 prosent kvinner eller menn i én "
-        "av endene er skravert: der flytter noen få personer prosenten mer "
-        "enn kjønnsbalansen i yrket gjør, av samme grunn som de minste yrkene "
-        "er skravert i laget over.",
+        format=FMT_POENG_ANDEL,
+        caption="Endring i kvinneandelen mellom de to punktene du har satt, i "
+        "prosentpoeng — et yrke som gikk fra 20 til 30 prosent kvinner får "
+        "+10 poeng, ikke +50 %. Ingen nedre grense her: en differanse i "
+        "poeng blir ikke stor av at yrket er lite, slik en prosent av en "
+        "liten telling gjør.",
     ),
     Lag(
         key="alder",
@@ -530,6 +546,24 @@ LAG: Final[tuple[Lag, ...]] = (
         caption="Snittalderen i yrket i det året du står på. Den sier hvem som er "
         "der da, ikke hvem som slutter snart — et yrke folk kommer til sent i "
         "karrieren har høy snittalder uten å være i ferd med å tømmes.",
+    ),
+    Lag(
+        key="alder_endring",
+        label="Endring i gjennomsnittsalder",
+        kolonne="gjennomsnittsalder",
+        serie="gjennomsnittsalder",
+        regel="change",
+        relativ=False,
+        roller=("avvik1", "avvik2", "avvik3", "avvik4", "avvik5"),
+        grenser=(-1.5, -0.3, 0.3, 1.5),
+        tekster=(
+            "ned over 1,5 år", "ned 0,3–1,5 år", "omtrent uendret",
+            "opp 0,3–1,5 år", "opp over 1,5 år",
+        ),
+        format=FMT_AAR_ENDRING,
+        caption="Endring i snittalderen mellom de to punktene du har satt, i "
+        "år — ikke i prosent av alderen, som ville gjort samme aldring til "
+        "et større tall i et ungt yrke enn i et gammelt.",
     ),
     Lag(
         key="sykefravaer",
@@ -553,22 +587,20 @@ LAG: Final[tuple[Lag, ...]] = (
         kolonne="sykefravaer_pst",
         serie="sykefravaer_pst",
         regel="change",
+        relativ=False,
         roller=("avvik1", "avvik2", "avvik3", "avvik4", "avvik5"),
-        grenser=(0.0, 0.10, 0.20, 0.30),
+        grenser=(0.0, 0.5, 1.0, 1.5),
         tekster=(
-            "ned", "opp 0–10 %", "opp 10–20 %",
-            "opp 20–30 %", "opp over 30 %",
+            "ned eller uendret", "opp 0–0,5 poeng", "opp 0,5–1 poeng",
+            "opp 1–1,5 poeng", "opp over 1,5 poeng",
         ),
-        format=FMT_ENDRING,
-        gulv=1.0,
-        under_ord="sykefraværet for lavt i én av endene til å regne endring",
-        caption="Relativ endring i sykefraværsprosenten mellom de to punktene "
-        "du har satt. Sykefraværet økte i de aller fleste yrker i perioden — "
-        "det er grunnen til at skalaen ikke er delt likt om null. Yrker med "
-        "under ett prosentpoeng sykefravær i én av endene er skravert: en "
-        "håndfull sykemeldinger flytter prosenten mer der enn i et yrke med "
-        "vanlig fravær. Rekkevidden følger laget over — se det for hvorfor "
-        "det siste årspunktet mangler.",
+        format=FMT_POENG_PST,
+        caption="Endring i sykefraværsprosenten mellom de to punktene du har "
+        "satt, i prosentpoeng. Sykefraværet økte i de aller fleste yrker i "
+        "perioden — det er grunnen til at skalaen ikke er delt likt om null. "
+        "Ingen nedre grense her: en differanse i poeng blir ikke stor av at "
+        "sykefraværet i utgangspunktet var lavt. Rekkevidden følger laget "
+        "over — se det for hvorfor det siste årspunktet mangler.",
     ),
     Lag(
         key="arbeidstid",
@@ -593,18 +625,20 @@ LAG: Final[tuple[Lag, ...]] = (
         kolonne="avtalt_arbeidstid",
         serie="avtalt_arbeidstid",
         regel="change",
+        relativ=False,
         roller=("avvik1", "avvik2", "avvik3", "avvik4", "avvik5"),
-        grenser=(-0.10, -0.02, 0.02, 0.10),
+        grenser=(-2.0, -0.3, 0.3, 1.0),
         tekster=(
-            "ned over 10 %", "ned 2–10 %", "omtrent uendret",
-            "opp 2–10 %", "opp over 10 %",
+            "ned over 2 t/uke", "ned 0,3–2 t/uke", "omtrent uendret",
+            "opp 0,3–1 t/uke", "opp over 1 t/uke",
         ),
-        format=FMT_ENDRING,
-        caption="Relativ endring i gjennomsnittlig avtalt arbeidstid mellom de "
-        "to punktene du har satt. De fleste yrkene ligger tett rundt null; det "
-        "er et fåtall med et markert fall som skiller seg fra resten. Ingen "
-        "nedre grense her: avtalt arbeidstid nærmer seg aldri null slik antall "
-        "lønnstakere kan gjøre i et lite yrke.",
+        format=FMT_TIMER_ENDRING,
+        caption="Endring i gjennomsnittlig avtalt arbeidstid mellom de to "
+        "punktene du har satt, i timer per uke — ikke i prosent, som ville "
+        "gjort samme timetallet til et større utslag i et yrke med kort "
+        "arbeidstid enn i et med lang. De fleste yrkene ligger tett rundt "
+        "null; det er et fåtall med et markert fall som skiller seg fra "
+        "resten.",
     ),
 )
 
@@ -702,9 +736,9 @@ def _grupper(df: pl.DataFrame) -> list[tuple[str, int, list[dict]]]:
 def _plot_fliser(df: pl.DataFrame, path: Path, periode: str) -> Path:
     """Flisediagrammet som PNG, farget etter medianlønn — lag nummer én.
 
-    PNG-en kan bare vise ett av de ti lagene, og bare ett tidspunkt. Den
+    PNG-en kan bare vise ett av de elleve lagene, og bare ett tidspunkt. Den
     viser det første laget i det siste årspunktet, og bildeteksten sier fra
-    om at de ni andre — og tidslinja — finnes i figuren sida tegner.
+    om at de ti andre — og tidslinja — finnes i figuren sida tegner.
     """
     B, H = 1180.0, 660.0
     # Skravurstreken er en global innstilling i matplotlib, ikke et argument
@@ -783,7 +817,7 @@ def _plot_fliser(df: pl.DataFrame, path: Path, periode: str) -> Path:
 
     fig.text(0.01, 0.005,
              f"Kilde: SSB tabell {TABELL}, {periode}. Farge viser medianlønn; i "
-             "figuren på nett kan de samme flisene farges etter ni andre mål.",
+             "figuren på nett kan de samme flisene farges etter ti andre mål.",
              fontsize=8, color="0.35")
     fig.tight_layout(rect=(0, 0.055, 1, 1))
     fig.savefig(path, dpi=150)
@@ -1203,7 +1237,7 @@ def _maal(verdi: float) -> float:
     """Målingen med så mange siffer den fortjener, og ikke flere.
 
     Seriene er den største enkeltposten i den ferdige sida — 400 yrker
-    ganger ti lag ganger elleve år — og en kvinneandel skrevet som
+    ganger elleve lag ganger elleve år — og en kvinneandel skrevet som
     0,6071904675213324 bruker atten tegn på å si noe figuren viser med
     tre. Presisjonen som beholdes ligger flere størrelsesordener under
     både trinngrensene og desimalene laget skriver ut, så hverken fargen
@@ -1233,7 +1267,7 @@ def _rekkevidde(
 
 
 def _graf_fliser(df: pl.DataFrame, aar_df: pl.DataFrame, kilde: str) -> publish.Chart:
-    """Flisediagrammet med ti lag og en tidslinje. Sakens midtpunkt.
+    """Flisediagrammet med elleve lag og en tidslinje. Sakens midtpunkt.
 
     Merk hva som *ikke* sendes: ingen farger, ingen piksler og ingen
     oppdeling. Analysen sier hvor stor en flate er, hvilken serie hvert lag
@@ -1286,6 +1320,7 @@ def _graf_fliser(df: pl.DataFrame, aar_df: pl.DataFrame, kilde: str) -> publish.
             + (((publish.article.TONE_MANGLER, "ikke publisert"),) if har_hull(i) else ()),
             caption=l.caption,
             rule=l.regel,
+            relative=l.relativ,
             edges=tuple(float(g) for g in l.grenser),
             format=l.format,
             level_label=l.nivaa_navn,
@@ -1863,8 +1898,8 @@ def artikkel(
         title="Det norske arbeidsmarkedet, yrke for yrke",
         lead=(
             f"Alle {med_flate} yrker med lønnstakere i Norge, som flater etter "
-            f"hvor mange som jobber i dem. Ti lag å farge dem etter, og alle "
-            "ti er målt — ingen framskrivinger, ingen anslag. Det egentlige "
+            f"hvor mange som jobber i dem. Elleve lag å farge dem etter, og alle "
+            "elleve er målt — ingen framskrivinger, ingen anslag. Det egentlige "
             "arbeidet i denne saken er ikke å tegne flisene, men å vite hvilke "
             "yrker man *ikke* kan regne ti års endring for."
         ),
