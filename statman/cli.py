@@ -175,6 +175,7 @@ EXAMPLES: dict[str, str] = {
     "farris": "examples.farris_vannkvalitet",
     "utflyttere-fifa": "examples.utflyttere_fifa",
     "arbeidsmarked": "examples.arbeidsmarked_yrke",
+    "flygeledere": "examples.flygeledere_lonn",
 }
 
 

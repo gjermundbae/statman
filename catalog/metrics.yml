@@ -625,3 +625,69 @@ yrke_reallonn_vekst:
       yrkesfordelingen, og at store endringer mellom disse periodene bør
       tolkes med forsiktighet. Det treffer sammensetningen av hvert yrke, og
       dermed også medianen i det."
+
+# --------------------------------------------------------------------------
+# Flygeledere. Ett yrke (STYRK-08 3154), to lønnskilder, ett ekte hull.
+# --------------------------------------------------------------------------
+
+flygeledere_median_lonn:
+  label: Median månedslønn for flygeledere
+  model: mart.flygeledere_lonn
+  column: median_lonn_nominell
+  unit: kroner per måned, nominelt
+  source: SSB tabell 11418 (årlig, november) og 11658 (kvartalsvis), yrke 3154
+  caveats:
+    - "To kilder som ikke måler det samme. 11418 er ett punkt i november,
+      alle sektorer, én gang i året. 11658 er kvartalets egen median. Begge
+      er avtalt lønn pluss uregelmessige tillegg — overtid er ikke med i
+      noen av dem — men et yrke som bytter mellom kildene fra ett år til
+      det neste kan hoppe litt av en grunn som ikke er en lønnsendring.
+      Kolonnen kilde sier hvilken som gjelder for hver rad, og de to skal
+      tegnes som to atskilte streker, ikke sys sammen til én."
+    - "SSB publiserer ikke medianlønn for flygeledere i kvartalstabellen før
+      2025K4. Alle 39 kvartalene 2016K1-2025K3 er null i kildens eget svar
+      — kontrollert mot rå json-stat2, ikke et utslag av filtrering her."
+    - "2021-2024 mangler i begge kilder. Den årlige reserven har 2015-2020
+      og 2025, men ikke de fire årene mellom. Det er ikke en snarvei tatt
+      her; det er hva SSB faktisk har publisert for dette yrket, og hullet
+      er ikke fylt med et interpolert tall eller et gjentatt fjorårstall."
+    - "Median, ikke gjennomsnitt. Halvparten av flygelederne tjener mer,
+      halvparten mindre; spredningen vises ikke."
+    - "SSB endrer små celler til 0 eller 3 av personvernhensyn ved
+      undertrykking av tellinger — det gjelder bestandstall, ikke
+      medianlønna selv, men er verdt å ha i bakhodet for et yrke på
+      rundt 500 personer."
+  breaks:
+    - "Lønnsnivået i 11658 har et generelt brudd i 1. kvartal 2020: endringer
+      hos opplysningspliktige ga mer korrekt rapportering og et høyere nivå.
+      SSB oppgir at bruddet var sterkest i bergverk og utvinning, men
+      beskriver det som en endring i rapporteringspraksis generelt — ikke
+      avgrenset til én næring. Det ligger midt i strekket 2019-2020 som
+      denne saken bruker til å vise den sterkeste veksten, og betyr at noe
+      av den veksten kan være bedre rapportering, ikke bare høyere lønn."
+    - "mart.arbeidsmarked_yrke_aar — den generelle tidsserien 407-yrkessaken
+      bruker — mister hele 2025-raden for akkurat dette yrket, fordi den
+      ankrer alle årspunkter til 2. kvartal og bestanden for flygeledere
+      mangler nøyaktig 2025K2 (og 2025K3). Denne saken bruker derfor egne
+      tabeller bygget på hele kvartalsserien i stedet for å lese av den."
+
+flygeledere_median_lonn_realt:
+  label: Median månedslønn for flygeledere, i faste kroner
+  model: mart.flygeledere_lonn
+  column: median_lonn_realt
+  unit: kroner per måned, i november 2025-kroner
+  source: SSB tabell 11418/11658, deflatert med SSB tabell 14700 (KPI, totalindeks)
+  caveats:
+    - "Deflatert med novemberindeksen 2025 — samme referanse for begge
+      kildene, valgt fordi den årlige kilden selv måler i november. Den
+      årlige serien deflateres med novemberindeksen samme år; den
+      kvartalsvise med snittet av kvartalets tre måneder."
+    - "Gjelder for yrket som helhet, ikke for én person. En flygeleder som
+      sto i yrket hele perioden kan ha hatt en annen lønnsutvikling enn
+      medianen — nye og avgåtte endrer sammensetningen."
+    - "Målt mellom de punktene som faktisk finnes, ikke framskrevet over
+      hullet. Endringen 2020-2025 hopper over fire uregistrerte år, og sier
+      ingenting om banen mellom dem — bare de to endepunktene."
+  breaks:
+    - "Samme rapporteringsbrudd i 1. kvartal 2020 som over. Realvekst målt
+      fra et år før 2020 til et år etter er derfor noe for høy."

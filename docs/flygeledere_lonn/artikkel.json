@@ -1,0 +1,504 @@
+{
+  "schema": "statman/artikkel/1",
+  "slug": "flygeledere_lonn",
+  "title": "Lønna til flygelederne — og fire år ingen har målt den",
+  "kicker": "Flygeledere · SSB tabell 11418 og 11658",
+  "lead": "Flygelederne streiker. Uansett hva striden egentlig står om — partene er uenige, se «Lønnsoppgjøret» under — er dette hva SSB har publisert om lønna til yrket streiken gjelder: en tydelig realvekst i første halvdel av tiåret, et fall i andre, og et firårig hull midt i der ingenting er målt i det hele tatt.",
+  "published": "2026-08-21",
+  "sections": [
+    {
+      "title": "Lønna",
+      "blocks": [
+        {
+          "type": "stats",
+          "items": [
+            {
+              "value": "122 220 kr",
+              "label": "Median månedslønn nå",
+              "note": "2026K2, SSB tabell 11658"
+            },
+            {
+              "value": "517",
+              "label": "Flygeledere i Norge",
+              "note": "2026K2, SSB tabell 11658"
+            },
+            {
+              "value": "+61,2 %",
+              "label": "Nominell vekst, 2015→2025",
+              "note": "november til november, samme kilde"
+            },
+            {
+              "value": "4 år",
+              "label": "Uten publisert medianlønn",
+              "note": "2021-2024, verken årlig eller kvartalsvis"
+            }
+          ]
+        },
+        {
+          "type": "findings",
+          "items": [
+            "SSB publiserer ikke medianlønn for flygeledere i kvartalstabellen før 4. kvartal 2025 — samtlige 39 kvartaler før det er tomme i kildens eget svar. Den årlige reservetabellen dekker mer, men heller ikke den har noe for **2021, 2022, 2023 eller 2024**. Figuren under viser nøyaktig det: to strekninger med tall, og et fireårig felt uten noen."
+          ]
+        },
+        {
+          "type": "chart",
+          "kind": "line",
+          "marks": [
+            {
+              "label": "Årlig (SSB 11418, november)",
+              "tone": "kat1",
+              "pin": true,
+              "points": [
+                [
+                  2015.8333333333333,
+                  75610
+                ],
+                [
+                  2016.8333333333333,
+                  77970
+                ],
+                [
+                  2017.8333333333333,
+                  81750
+                ],
+                [
+                  2018.8333333333333,
+                  86860
+                ],
+                [
+                  2019.8333333333333,
+                  89470
+                ],
+                [
+                  2020.8333333333333,
+                  103670
+                ]
+              ],
+              "point_labels": [
+                "2015 · 75 610 kr",
+                "2016 · 77 970 kr",
+                "2017 · 81 750 kr",
+                "2018 · 86 860 kr",
+                "2019 · 89 470 kr",
+                "2020 · 103 670 kr"
+              ]
+            },
+            {
+              "label": "Kvartalsvis (SSB 11658)",
+              "tone": "vekst",
+              "pin": true,
+              "points": [
+                [
+                  2025.875,
+                  119800
+                ],
+                [
+                  2026.125,
+                  120260
+                ],
+                [
+                  2026.375,
+                  122220
+                ]
+              ],
+              "point_labels": [
+                "2025K4 · 119 800 kr",
+                "2026K1 · 120 260 kr",
+                "2026K2 · 122 220 kr"
+              ]
+            }
+          ],
+          "fallback": "lonn.png",
+          "alt": "Linjediagram: median månedslønn for flygeledere, 2015-2026, med et fireårig felt uten tall mellom 2021 og 2024.",
+          "x": {
+            "lo": 2014.6,
+            "hi": 2026.7,
+            "ticks": [
+              2015.0,
+              2016.0,
+              2017.0,
+              2018.0,
+              2019.0,
+              2020.0,
+              2021.0,
+              2022.0,
+              2023.0,
+              2024.0,
+              2025.0,
+              2026.0
+            ],
+            "tick_labels": [
+              "2015",
+              "2016",
+              "2017",
+              "2018",
+              "2019",
+              "2020",
+              "2021",
+              "2022",
+              "2023",
+              "2024",
+              "2025",
+              "2026"
+            ]
+          },
+          "y": {
+            "label": "← Median månedslønn, nominelt",
+            "lo": 65000,
+            "hi": 135000,
+            "ticks": [
+              70000.0,
+              85000.0,
+              100000.0,
+              115000.0,
+              130000.0
+            ],
+            "tick_labels": [
+              "70 000 kr",
+              "85 000 kr",
+              "100 000 kr",
+              "115 000 kr",
+              "130 000 kr"
+            ]
+          },
+          "legend": [],
+          "guides": [],
+          "link": "",
+          "picker": "",
+          "group_label": "",
+          "caption": "To kilder, aldri sammenslått til én linje: den årlige reserven (11418) til venstre, kvartalstabellen (11658) til høyre. Feltet mellom dem er ikke en tegnefeil — det er hva SSB faktisk har publisert for dette yrket.",
+          "source": "SSB tabell 11418 og 11658, yrke 3154.",
+          "width": "full",
+          "layers": [],
+          "layer_label": "",
+          "timeline": null
+        }
+      ]
+    },
+    {
+      "title": "Reallønn",
+      "blocks": [
+        {
+          "type": "stats",
+          "items": [
+            {
+              "value": "+23,7 %",
+              "label": "Reallønn, 2015→2020",
+              "note": "november til november"
+            },
+            {
+              "value": "-4,9 %",
+              "label": "Reallønn, 2020→2025",
+              "note": "november til november"
+            },
+            {
+              "value": "+17,6 %",
+              "label": "Reallønn, 2015→2025",
+              "note": "hele strekningen, samme kilde"
+            },
+            {
+              "value": "+37,1 %",
+              "label": "Prisvekst, 2015→2025",
+              "note": "KPI totalindeks, november"
+            }
+          ]
+        },
+        {
+          "type": "findings",
+          "items": [
+            "Nominelt steg medianlønna +37,1 % fra november 2015 til november 2020, godt over prisveksten i samme periode (+10,9 %) — en reallønnsvekst på +23,7 %. Fra 2020 til 2025 var det motsatt: nominelt +17,6 %, men prisene steg mer, og reallønna falt -4,9 %. Over hele strekningen, 2015 til 2025, er nettoresultatet likevel en realvekst på +17,6 % — drevet av den første halvdelen.",
+            "**Ett forbehold veier tungt her.** SSB melder om et brudd i lønnsnivået i 1. kvartal 2020: bedre rapportering fra arbeidsgiverne ga et generelt høyere målt nivå, ikke bare i enkeltnæringer. Det ligger midt i strekningen 2015-2020, og betyr at noe av den sterke veksten der kan være bedre registrering snarere enn høyere lønn. Ingen del av dette tallgrunnlaget kan skille de to fra hverandre.",
+            "Disse tallene hopper over de fire uregistrerte årene i midten. De sier hva som skjedde mellom to punkter, ikke noe om banen mellom dem — reallønna kan ha steget og falt flere ganger i mellomtiden uten at det vises her."
+          ]
+        },
+        {
+          "type": "chart",
+          "kind": "line",
+          "marks": [
+            {
+              "label": "Årlig (SSB 11418, november)",
+              "tone": "kat1",
+              "pin": true,
+              "points": [
+                [
+                  2015.8333333333333,
+                  103656
+                ],
+                [
+                  2016.8333333333333,
+                  103244
+                ],
+                [
+                  2017.8333333333333,
+                  107124
+                ],
+                [
+                  2018.8333333333333,
+                  109965
+                ],
+                [
+                  2019.8333333333333,
+                  111451
+                ],
+                [
+                  2020.8333333333333,
+                  128190
+                ]
+              ],
+              "point_labels": [
+                "2015 · 103 656 kr",
+                "2016 · 103 244 kr",
+                "2017 · 107 124 kr",
+                "2018 · 109 965 kr",
+                "2019 · 111 451 kr",
+                "2020 · 128 190 kr"
+              ]
+            },
+            {
+              "label": "Kvartalsvis (SSB 11658)",
+              "tone": "vekst",
+              "pin": true,
+              "points": [
+                [
+                  2025.875,
+                  119840
+                ],
+                [
+                  2026.125,
+                  118885
+                ],
+                [
+                  2026.375,
+                  119883
+                ]
+              ],
+              "point_labels": [
+                "2025K4 · 119 840 kr",
+                "2026K1 · 118 885 kr",
+                "2026K2 · 119 883 kr"
+              ]
+            }
+          ],
+          "fallback": "reallonn.png",
+          "alt": "Linjediagram: median månedslønn for flygeledere i 2025-kroner, 2015-2026, med samme firårige felt uten tall.",
+          "x": {
+            "lo": 2014.6,
+            "hi": 2026.7,
+            "ticks": [
+              2015.0,
+              2016.0,
+              2017.0,
+              2018.0,
+              2019.0,
+              2020.0,
+              2021.0,
+              2022.0,
+              2023.0,
+              2024.0,
+              2025.0,
+              2026.0
+            ],
+            "tick_labels": [
+              "2015",
+              "2016",
+              "2017",
+              "2018",
+              "2019",
+              "2020",
+              "2021",
+              "2022",
+              "2023",
+              "2024",
+              "2025",
+              "2026"
+            ]
+          },
+          "y": {
+            "label": "← Median månedslønn, 2025-kroner",
+            "lo": 90000,
+            "hi": 135000,
+            "ticks": [
+              95000.0,
+              105000.0,
+              115000.0,
+              125000.0
+            ],
+            "tick_labels": [
+              "95 000 kr",
+              "105 000 kr",
+              "115 000 kr",
+              "125 000 kr"
+            ]
+          },
+          "legend": [],
+          "guides": [],
+          "link": "",
+          "picker": "",
+          "group_label": "",
+          "caption": "Samme to kilder som over, deflatert til 2025-kroner med KPI totalindeks. Realveksten var sterkere i første halvdel av perioden enn i andre — se forbeholdet om rapporteringsbruddet i 2020 før den forskjellen leses som en trend.",
+          "source": "SSB tabell 11418 og 11658, yrke 3154.",
+          "width": "full",
+          "layers": [],
+          "layer_label": "",
+          "timeline": null
+        }
+      ]
+    },
+    {
+      "title": "Lønnsoppgjøret",
+      "blocks": [
+        {
+          "type": "findings",
+          "items": [
+            "Flygelederne har streiket siden fredag formiddag 21. august 2026, etter brudd i meklingen mellom Norsk Flygelederforening (NFF) og Spekter/Avinor Flysikring. Partene er uenige om hva striden står om: **NFF sier den handler om arbeidstid** — pauser, livsfasepolitikk og rammer for instruktørvirksomhet, ikke lønn — og at flygeledere risikerer å stå i tjeneste 8 til 16 timer uten pause. **Spekter sier NFF avviste et lønnstillegg på linje med frontfaget**, i snitt 62 000 kr per flygeleder, og krevde arbeidstidsendringer som ville økt bemanningsbehovet og kostnadene betydelig.",
+            "Spekter har oppgitt at flygeledere i snitt hadde 1 517 385 kr i fast årslønn og 1 658 755 kr inkludert faste tillegg og overtid, per 2026-03-31. SSBs egen median for samme periode ligger noe lavere — 119 800 kr i 2025K4 — som ventet når den ene er en median og den andre et snitt, og de ikke er målt på nøyaktig samme dag eller med samme metode."
+          ]
+        },
+        {
+          "type": "chart",
+          "kind": "line",
+          "marks": [
+            {
+              "label": "SSB, median månedslønn",
+              "tone": "vekst",
+              "pin": true,
+              "points": [
+                [
+                  2025.875,
+                  119800
+                ],
+                [
+                  2026.125,
+                  120260
+                ],
+                [
+                  2026.375,
+                  122220
+                ]
+              ],
+              "point_labels": [
+                "2025K4 · 119 800 kr",
+                "2026K1 · 120 260 kr",
+                "2026K2 · 122 220 kr"
+              ]
+            }
+          ],
+          "fallback": "oppgjor.png",
+          "alt": "Linjediagram med tre punkter — SSBs median de tre eneste publiserte kvartalene — og to horisontale linjer for Spekters oppgitte snittlønn.",
+          "x": {
+            "lo": 2025.725,
+            "hi": 2026.975,
+            "ticks": [
+              2025.875,
+              2026.125,
+              2026.375
+            ],
+            "tick_labels": [
+              "2025K4",
+              "2026K1",
+              "2026K2"
+            ]
+          },
+          "y": {
+            "label": "Kroner per måned",
+            "lo": 110000,
+            "hi": 142000,
+            "ticks": [
+              110000.0,
+              115000.0,
+              120000.0,
+              125000.0,
+              130000.0,
+              135000.0,
+              140000.0
+            ],
+            "tick_labels": [
+              "110 000 kr",
+              "115 000 kr",
+              "120 000 kr",
+              "125 000 kr",
+              "130 000 kr",
+              "135 000 kr",
+              "140 000 kr"
+            ]
+          },
+          "legend": [],
+          "guides": [
+            {
+              "kind": "y",
+              "at": 126448.75,
+              "labels": [
+                "Spekter/Avinor: snitt fast årslønn ÷ 12"
+              ]
+            },
+            {
+              "kind": "y",
+              "at": 138229.58333333334,
+              "labels": [
+                "Spekter/Avinor: snitt inkl. tillegg og overtid ÷ 12"
+              ]
+            }
+          ],
+          "link": "",
+          "picker": "",
+          "group_label": "",
+          "caption": "SSBs median holder overtid utenfor, akkurat som Spekters «fast årslønn». De to ligger likevel ikke like — en median er lavere enn et snitt i en høyreskjev fordeling, og de to tallene er ikke målt på samme dag eller med samme metode.",
+          "source": "SSB tabell 11658. Spekter/Avinor, snitt per 2026-03-31.",
+          "width": "full",
+          "layers": [],
+          "layer_label": "",
+          "timeline": null
+        }
+      ]
+    },
+    {
+      "title": "Metode",
+      "blocks": [
+        {
+          "type": "findings",
+          "items": [
+            "Kilde: SSB tabell 11658 (kvartalsvis medianlønn) og 11418 (årlig reserve, november, alle sektorer), yrke 3154 — «Flygeledere» i STYRK-08. Hentet 2026-08-21T19:02:54Z.",
+            "**Kvartalstabellen mangler medianlønn for flygeledere i alle 39 kvartaler 2016K1-2025K3.** Kontrollert direkte mot rå json-stat2-svar, ikke et utslag av filtrering i denne saken: verdien er `null` i kildens eget svar. Den årlige reserven dekker 2015-2020 og 2025, men heller ikke den har noe for 2021-2024 — det hullet er ikke fylt her, verken med et interpolert tall eller et gjentatt tall fra et naboår.",
+            "**Den generelle 407-yrkessaken (mart.arbeidsmarked_yrke_aar) mister hele 2025 for akkurat dette yrket**, uten at noen sjekk der fanger det. Den modellen ankrer alle årspunkter til 2. kvartal, og bestanden for flygeledere mangler nøyaktig 2025K2 (og 2025K3) — et generelt hull i kilden som rammer 2 av 583 yrkeskoder det kvartalet, og flygeledere er en av dem. Uten en bestandsverdi å ankre til, faller hele 2025-raden bort der. Denne saken bygger derfor egne tabeller på hele kvartalsserien i stedet for å lese av den eksisterende.",
+            "Begge lønnskildene er avtalt lønn omregnet til heltid, pluss uregelmessige tillegg og bonus — overtid er ikke med i noen av dem. De måler likevel ikke det samme: den årlige tabellen er ett punkt i november, alle sektorer; den kvartalsvise er kvartalets egen median. Et yrke som bytter mellom kildene kan hoppe litt av en grunn som ikke er en lønnsendring — her er avviket mellom dem -1,7 % i det ene overlappende punktet (2025K4 mot 2025 årlig), som er nær nok til at de to i det minste ikke motsier hverandre.",
+            "**Reallønn er deflatert med KPI totalindeks (SSB tabell 14700) til 2025-kroner** — novemberindeksen det siste året den årlige kilden dekker. Den årlige serien deflateres med novemberindeksen samme år; den kvartalsvise med snittet av kvartalets tre måneder. Begge bruker samme referanse, så et bytte av kilde ikke også blir et bytte av prisbasis.",
+            "**SSB melder om et brudd i lønnsnivået i 1. kvartal 2020**: bedre rapportering fra opplysningspliktige ga et høyere målt nivå generelt, ikke avgrenset til én næring. Det ligger midt i strekningen 2015-2020 som denne saken bruker til å vise den sterkeste veksten, og noe av den kan derfor være bedre registrering snarere enn en reell lønnsøkning.",
+            "Lønnsoppgjørstallene fra Spekter/Avinor er hentet fra deres offentlige pressemateriell i forbindelse med meklingen, ikke fra SSB, og er snitt — ikke median. De to tallseriene i denne saken er derfor ikke direkte sammenlignbare uten forbeholdet i figurteksten over.",
+            "Modellene `mart.flygeledere_lonn` og `mart.flygeledere_bestand_siste`, bygget av statman 2026-08-21 19:02:54Z."
+          ]
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "flygeledere_median_lonn",
+    "flygeledere_median_lonn_realt",
+    "yrke_lonnstakere"
+  ],
+  "provenance": {
+    "Kilde": "SSB tabell 11658 og 11418, yrke 3154",
+    "Hentet": "2026-08-21T19:02:54Z",
+    "Yrkesstandard": "STYRK-08 via SSB KLASS 7, per 2026-01-01",
+    "Lønnsoppgjørstall": "Spekter/Avinor, snitt per 2026-03-31 (ikke SSB)",
+    "Modeller": "mart.flygeledere_lonn · mart.flygeledere_bestand_siste",
+    "Bygget": "2026-08-21 19:02:54Z"
+  },
+  "files": [
+    [
+      "flygeledere_lonn.csv",
+      "alle rader i mart.flygeledere_lonn"
+    ],
+    [
+      "lonn.png",
+      "median månedslønn, nominelt, 2015-2026"
+    ],
+    [
+      "reallonn.png",
+      "median månedslønn, faste kroner, 2015-2026"
+    ],
+    [
+      "oppgjor.png",
+      "de tre siste kvartalene mot lønnsoppgjøret"
+    ]
+  ]
+}
