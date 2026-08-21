@@ -2,8 +2,8 @@
   "schema": "statman/artikkel/1",
   "slug": "flygeledere_lonn",
   "title": "Lønna til flygelederne — og fire år ingen har målt den",
-  "kicker": "Flygeledere · SSB tabell 11418 og 11658",
-  "lead": "Flygelederne streiker. Uansett hva striden egentlig står om — partene er uenige, se «Lønnsoppgjøret» under — er dette hva SSB har publisert om lønna til yrket streiken gjelder: en tydelig realvekst i første halvdel av tiåret, et fall i andre, og et firårig hull midt i der ingenting er målt i det hele tatt.",
+  "kicker": "Flygeledere · SSB tabell 11418/11658 · EUROCONTROL/PRB",
+  "lead": "Flygelederne streiker. Uansett hva striden egentlig står om — partene er uenige, se «Lønnsoppgjøret» under — er dette hva SSB har publisert om lønna til yrket streiken gjelder: en tydelig realvekst i første halvdel av tiåret, et fall i andre, og et firårig hull midt i der ingenting er målt i det hele tatt. «Arbeidsbelastning» under ser på det NFF selv sier streiken faktisk handler om.",
   "published": "2026-08-21",
   "sections": [
     {
@@ -452,19 +452,145 @@
       ]
     },
     {
+      "title": "Arbeidsbelastning",
+      "blocks": [
+        {
+          "type": "stats",
+          "items": [
+            {
+              "value": "40 av 42",
+              "label": "Bodø ACC (ENBD), ATCO i tjeneste/plan",
+              "note": "2024, EUROCONTROL/PRB"
+            },
+            {
+              "value": "90 av 104",
+              "label": "Oslo ACC (ENOSE), ATCO i tjeneste/plan",
+              "note": "2024, EUROCONTROL/PRB"
+            },
+            {
+              "value": "29 av 31",
+              "label": "Stavanger ACC (ENOSW), ATCO i tjeneste/plan",
+              "note": "2024, EUROCONTROL/PRB"
+            }
+          ]
+        },
+        {
+          "type": "findings",
+          "items": [
+            "NFFs uttalte konfliktgrunn er ikke lønn, men arbeidstid. SSBs egne arbeidstidstall for yrket holder ikke mål her — se Metode for hvorfor. Det som finnes og er sammenlignbart, er EUROCONTROL/PRBs årlige overvåkingsrapport for Avinor Flysikring: bemanning mot selskapets egen plan, og trafikk per driftstime. Ingen av delene måler det NFF konkret beskriver — vaktlengde og pauser — men begge sier noe om belastningen rundt dem. I 2024 var alle tre kontrollsentraler bemannet under sin egen plan: 159 flygeledere i operativ tjeneste mot en plan på 177.",
+            "Trafikken har samtidig tatt seg opp igjen etter pandemien: Norge hadde 549K IFR-bevegelser i 2024, -7,1 % fra 2019-nivået (591K). Ved Bodø ACC — kontrollsentralen med mest sammenhengende tall i denne kilden — har det gitt flere IFR-bevegelser per sektor-åpningstime i alle årene rapporten oppgir tallet, sammenlignet med 2019."
+          ]
+        },
+        {
+          "type": "chart",
+          "kind": "line",
+          "marks": [
+            {
+              "label": "Bodø ACC, 2020-2021",
+              "tone": "kat1",
+              "pin": true,
+              "points": [
+                [
+                  2020.0,
+                  5.47
+                ],
+                [
+                  2021.0,
+                  7.19
+                ]
+              ],
+              "point_labels": [
+                "2020 · 5.47 bevegelser/time",
+                "2021 · 7.19 bevegelser/time"
+              ]
+            },
+            {
+              "label": "Bodø ACC, 2023-2024",
+              "tone": "kat1",
+              "pin": true,
+              "points": [
+                [
+                  2023.0,
+                  7.33
+                ],
+                [
+                  2024.0,
+                  7.62
+                ]
+              ],
+              "point_labels": [
+                "2023 · 7.33 bevegelser/time",
+                "2024 · 7.62 bevegelser/time"
+              ]
+            }
+          ],
+          "fallback": "bodo_produktivitet.png",
+          "alt": "Linjediagram: IFR-bevegelser per sektor-åpningstime ved Bodø ACC, 2020-2024, med et hull i 2022 der tallet ikke er oppgitt.",
+          "x": {
+            "lo": 2019.6,
+            "hi": 2024.6,
+            "ticks": [
+              2020.0,
+              2021.0,
+              2022.0,
+              2023.0,
+              2024.0
+            ],
+            "tick_labels": [
+              "2020",
+              "2021",
+              "2022",
+              "2023",
+              "2024"
+            ]
+          },
+          "y": {
+            "label": "IFR-bevegelser per sektor-åpningstime",
+            "lo": 5.0,
+            "hi": 8.0,
+            "ticks": [
+              5.0,
+              6.0,
+              7.0,
+              8.0
+            ],
+            "tick_labels": [
+              "5,0",
+              "6,0",
+              "7,0",
+              "8,0"
+            ]
+          },
+          "legend": [],
+          "guides": [],
+          "link": "",
+          "picker": "",
+          "group_label": "",
+          "caption": "Bodø ACC er valgt fordi det er den eneste av de tre kontrollsentralene med tall for fire av fem år i denne kilden — ikke fordi den nødvendigvis er representativ for Oslo og Stavanger ACC. 2022 mangler et tall for Bodø.",
+          "source": "EUROCONTROL/PRB Annual Monitoring Report, Norge, 2020-2024.",
+          "width": "full",
+          "layers": [],
+          "layer_label": "",
+          "timeline": null
+        }
+      ]
+    },
+    {
       "title": "Metode",
       "blocks": [
         {
           "type": "findings",
           "items": [
-            "Kilde: SSB tabell 11658 (kvartalsvis medianlønn) og 11418 (årlig reserve, november, alle sektorer), yrke 3154 — «Flygeledere» i STYRK-08. Hentet 2026-08-21T19:02:54Z.",
+            "Kilde: SSB tabell 11658 (kvartalsvis medianlønn) og 11418 (årlig reserve, november, alle sektorer), yrke 3154 — «Flygeledere» i STYRK-08. Hentet 2026-08-21T19:48:16Z.",
             "**Kvartalstabellen mangler medianlønn for flygeledere i alle 39 kvartaler 2016K1-2025K3.** Kontrollert direkte mot rå json-stat2-svar, ikke et utslag av filtrering i denne saken: verdien er `null` i kildens eget svar. Den årlige reserven dekker 2015-2020 og 2025, men heller ikke den har noe for 2021-2024 — det hullet er ikke fylt her, verken med et interpolert tall eller et gjentatt tall fra et naboår.",
             "**Den generelle 407-yrkessaken (mart.arbeidsmarked_yrke_aar) mister hele 2025 for akkurat dette yrket**, uten at noen sjekk der fanger det. Den modellen ankrer alle årspunkter til 2. kvartal, og bestanden for flygeledere mangler nøyaktig 2025K2 (og 2025K3) — et generelt hull i kilden som rammer 2 av 583 yrkeskoder det kvartalet, og flygeledere er en av dem. Uten en bestandsverdi å ankre til, faller hele 2025-raden bort der. Denne saken bygger derfor egne tabeller på hele kvartalsserien i stedet for å lese av den eksisterende.",
             "Begge lønnskildene er avtalt lønn omregnet til heltid, pluss uregelmessige tillegg og bonus — overtid er ikke med i noen av dem. De måler likevel ikke det samme: den årlige tabellen er ett punkt i november, alle sektorer; den kvartalsvise er kvartalets egen median. Et yrke som bytter mellom kildene kan hoppe litt av en grunn som ikke er en lønnsendring — her er avviket mellom dem -1,7 % i det ene overlappende punktet (2025K4 mot 2025 årlig), som er nær nok til at de to i det minste ikke motsier hverandre.",
             "**Reallønn er deflatert med KPI totalindeks (SSB tabell 14700) til 2025-kroner** — novemberindeksen det siste året den årlige kilden dekker. Den årlige serien deflateres med novemberindeksen samme år; den kvartalsvise med snittet av kvartalets tre måneder. Begge bruker samme referanse, så et bytte av kilde ikke også blir et bytte av prisbasis.",
             "**SSB melder om et brudd i lønnsnivået i 1. kvartal 2020**: bedre rapportering fra opplysningspliktige ga et høyere målt nivå generelt, ikke avgrenset til én næring. Det ligger midt i strekningen 2015-2020 som denne saken bruker til å vise den sterkeste veksten, og noe av den kan derfor være bedre registrering snarere enn en reell lønnsøkning.",
             "Lønnsoppgjørstallene fra Spekter/Avinor er hentet fra deres offentlige pressemateriell i forbindelse med meklingen, ikke fra SSB, og er snitt — ikke median. De to tallseriene i denne saken er derfor ikke direkte sammenlignbare uten forbeholdet i figurteksten over.",
-            "Modellene `mart.flygeledere_lonn` og `mart.flygeledere_bestand_siste`, bygget av statman 2026-08-21 19:02:54Z."
+            "**SSBs arbeidstidstabell for yrket (tabell 12542) er sjekket og forkastet.** Den bryter sysselsatte flygeledere ned på seks arbeidstidskategorier per år, men tabellen selv opplyser at «alle ett-tall og to-tall … er endret til '0' eller '3' for å ivareta personvernet» — for et yrke på 700-800 personer fordelt på seks kategorier er de fleste cellene små nok til å rammes. Bare hovedkategorien (35-37 timer, som over 80 % faller i) er stor nok til å være til å stole på, og selv den sier ingenting om vaktlengde, pauser eller overtid — det NFF faktisk beskriver. Tabellen er derfor ikke brukt her, verken i tekst eller figur.",
+            "**EUROCONTROL/PRBs Annual Monitoring Report for Norge (2020-2024, én PDF per år) er ikke en datatabell, men løpende tekst.** Tallene under «Arbeidsbelastning» er hentet med regulære uttrykk mot nøyaktig de formuleringene rapportene faktisk bruker, kontrollert mot alle fem årene — se `statman/models/clean_eurocontrol_norge.py`. Rapportene nevner ikke alle tre kontrollsentralene (Bodø/Oslo/Stavanger ACC) med et konkret tall hvert år, og ATCO-bemanning har bare et grunntall for 2024 — tidligere år oppgir kun avvik fra planen, ikke et tall å trekke fra. Ingen av hullene er fylt.",
+            "Modellene `mart.flygeledere_lonn`, `mart.flygeledere_bestand_siste`, `mart.eurocontrol_bodo_arbeidsbelastning` og `mart.eurocontrol_bemanning_2024`, bygget av statman 2026-08-21 19:48:16Z (EUROCONTROL-modellene 2026-08-21 19:48:28Z)."
           ]
         }
       ]
@@ -477,16 +603,21 @@
   ],
   "provenance": {
     "Kilde": "SSB tabell 11658 og 11418, yrke 3154",
-    "Hentet": "2026-08-21T19:02:54Z",
+    "Hentet": "2026-08-21T19:48:16Z",
     "Yrkesstandard": "STYRK-08 via SSB KLASS 7, per 2026-01-01",
     "Lønnsoppgjørstall": "Spekter/Avinor, snitt per 2026-03-31 (ikke SSB)",
-    "Modeller": "mart.flygeledere_lonn · mart.flygeledere_bestand_siste",
-    "Bygget": "2026-08-21 19:02:54Z"
+    "Arbeidsbelastning": "EUROCONTROL/PRB Annual Monitoring Report, Norge, 2020-2024",
+    "Modeller": "mart.flygeledere_lonn · mart.flygeledere_bestand_siste · mart.eurocontrol_bodo_arbeidsbelastning · mart.eurocontrol_bemanning_2024",
+    "Bygget": "2026-08-21 19:48:16Z"
   },
   "files": [
     [
       "flygeledere_lonn.csv",
       "alle rader i mart.flygeledere_lonn"
+    ],
+    [
+      "arbeidsbelastning.csv",
+      "alle rader i mart.eurocontrol_bodo_arbeidsbelastning"
     ],
     [
       "lonn.png",
@@ -499,6 +630,10 @@
     [
       "oppgjor.png",
       "de tre siste kvartalene mot lønnsoppgjøret"
+    ],
+    [
+      "bodo_produktivitet.png",
+      "IFR-bevegelser per sektor-åpningstime, Bodø ACC, 2020-2024"
     ]
   ]
 }

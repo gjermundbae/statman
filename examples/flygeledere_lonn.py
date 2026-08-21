@@ -1,4 +1,4 @@
-"""Ende-til-ende-eksempel: lønn og lønnsendringer for flygeledere.
+"""Ende-til-ende-eksempel: lønn, lønnsendringer og arbeidsbelastning for flygeledere.
 
 Ett yrke, STYRK-08 3154, ute av 407 i den store yrkessaken. Kjeden:
 
@@ -6,15 +6,18 @@ Ett yrke, STYRK-08 3154, ute av 407 i den store yrkessaken. Kjeden:
     ssb.fetch_table(11658, ...)   ->  raw/ssb/11658_kvartal, _lonn_kvartal
     ssb.fetch_table(11418, ...)   ->  raw/ssb/11418_lonn_aar
     ssb.fetch_table(14700, ...)   ->  raw/ssb/14700_kpi
+    eurocontrol.fetch_prb_norway(2020..2024) -> raw/eurocontrol/prb_norway_<år>
       -> clean.styrk, clean.yrke_kvartal, clean.yrke_lonn_kvartal,
-         clean.yrke_lonn_aar, clean.konsumprisindeks
-      -> mart.flygeledere_lonn, mart.flygeledere_bestand_siste
+         clean.yrke_lonn_aar, clean.konsumprisindeks,
+         clean.eurocontrol_trafikk_norge, clean.eurocontrol_kapasitet
+      -> mart.flygeledere_lonn, mart.flygeledere_bestand_siste,
+         mart.eurocontrol_bodo_arbeidsbelastning, mart.eurocontrol_bemanning_2024
       -> output/flygeledere_lonn/     (sakspakke)
       -> statman publish flygeledere_lonn  -> docs/   (artikkel)
 
-Rådataene er de samme uttrekkene ``examples/arbeidsmarked_yrke.py`` henter
-for alle 407 yrker — samme spørring, samme parametre, en ny tidsstemplet
-kopi. Det er med vilje: å hente en smalere versjon under samme
+Rådataene til lønnsdelen er de samme uttrekkene ``examples/arbeidsmarked_yrke.py``
+henter for alle 407 yrker — samme spørring, samme parametre, en ny
+tidsstemplet kopi. Det er med vilje: å hente en smalere versjon under samme
 datasettnavn ville flyttet «nyeste» for den store yrkessaken også. Se
 ``statman/models/mart_flygeledere.py`` for hvorfor yrket likevel trenger
 egne mart-tabeller og ikke bare et filter på de eksisterende.
@@ -24,6 +27,17 @@ Saken skrives i lys av flygeledernes streik, som startet fredag formiddag
 (NFF) og Spekter/Avinor Flysikring. Tallene her tar ikke stilling til hvem
 som har rett i konflikten — de svarer bare på hva lønna har vært, og hvor
 den ikke er målt.
+
+**Arbeidsbelastning** er lagt til i lys av at NFFs uttalte konfliktgrunn
+ikke er lønn, men arbeidstid — pauser, livsfasepolitikk og rammer for
+instruktørvirksomhet. SSBs egne arbeidstidstall for yrket er sjekket og
+forkastet (se Metode: for lite yrke, tallene er personvern-avrundet på en
+måte som gjør dem ubrukelige). Det som faktisk finnes og holder mål, er
+EUROCONTOLs/PRBs årlige overvåkingsrapport for Avinor Flysikring —
+bemanning mot egen plan og trafikk per driftstime. Det måler ikke det
+samme som NFF beskriver (vaktlengde, pauser), men er den nærmeste
+offentlige, sammenlignbare arbeidsbelastningsindikatoren som finnes. Se
+``statman/models/clean_eurocontrol_norge.py``.
 
 Kjør:  uv run statman example flygeledere
 """
@@ -44,8 +58,9 @@ from statman import io, publish  # noqa: E402
 from statman.models.clean_ssb_kpi import RAW_KPI, TOTALINDEKS  # noqa: E402
 from statman.models.clean_ssb_yrke import RAW_KVARTAL, RAW_LONN_AAR, RAW_LONN_KVARTAL  # noqa: E402
 from statman.models.clean_styrk import RAW_STYRK  # noqa: E402
+from statman.models.clean_eurocontrol_norge import YEARS as EUROCONTROL_YEARS  # noqa: E402
 from statman.models.mart_flygeledere import KPI_REFERANSE_MAANED, YRKE  # noqa: E402
-from statman.sources import klass, ssb  # noqa: E402
+from statman.sources import eurocontrol, klass, ssb  # noqa: E402
 
 SLUG: Final[str] = "flygeledere_lonn"
 
@@ -57,7 +72,9 @@ STYRK_DATO: Final[str] = "2026-01-01"
 
 MODEL_LONN: Final[str] = "mart.flygeledere_lonn"
 MODEL_BESTAND: Final[str] = "mart.flygeledere_bestand_siste"
-MODELS: Final[list[str]] = [MODEL_LONN, MODEL_BESTAND]
+MODEL_BODO: Final[str] = "mart.eurocontrol_bodo_arbeidsbelastning"
+MODEL_BEMANNING: Final[str] = "mart.eurocontrol_bemanning_2024"
+MODELS: Final[list[str]] = [MODEL_LONN, MODEL_BESTAND, MODEL_BODO, MODEL_BEMANNING]
 
 METRICS: Final[tuple[str, ...]] = (
     "flygeledere_median_lonn",
@@ -81,19 +98,27 @@ FRONTFAG_TILLEGG: Final[float] = 62_000.0
 FARGE_AARLIG: Final[str] = "#2b6ca3"
 FARGE_KVARTAL: Final[str] = "#2a9d5c"
 FARGE_SPEKTER: Final[str] = "#a33b32"
+FARGE_KAPASITET: Final[str] = "#6a4c93"
 
 AARLIG_TIL_OG_MED: Final[int] = 2020  # siste år i den sammenhengende, tidlige strekningen
+
+# EUROCONTOLs kilde skriver «Bodo», uten ø — engelsk rapport, ikke norsk stedsnavn.
+# Norsk stavemåte hører til presentasjonen, ikke til dataene selskapet selv publiserer.
+ACC_VISNINGSNAVN: Final[dict[str, str]] = {
+    "Bodo": "Bodø ACC", "Oslo": "Oslo ACC", "Stavanger": "Stavanger ACC",
+}
 
 
 # --------------------------------------------------------------------------
 # Ingest
 # --------------------------------------------------------------------------
 def ingest() -> dict[str, Path]:
-    """Hent kodeverket og de fire utsnittene mart-tabellene trenger.
+    """Hent kodeverket, de fire SSB-utsnittene og de fem EUROCONTROL-rapportene.
 
-    Samme spørringer som ``examples/arbeidsmarked_yrke.py`` bruker for de
-    samme fire datasettene — se moduldocstringen for hvorfor de ikke
-    innsnevres til ett yrke her.
+    SSB-spørringene er de samme som ``examples/arbeidsmarked_yrke.py`` bruker
+    for de samme fire datasettene — se moduldocstringen for hvorfor de ikke
+    innsnevres til ett yrke her. EUROCONTROL-rapportene er derimot allerede
+    landsspesifikke (Norge/Avinor Flysikring) — én PDF per år, 2020-2024.
     """
     ssb.probe()
     written: dict[str, Path] = {
@@ -131,6 +156,8 @@ def ingest() -> dict[str, Path]:
         value_codes={"VareTjenesteGrp": TOTALINDEKS, "ContentsCode": "KpiIndMnd", "Tid": "*"},
         dataset=RAW_KPI.partition("/")[2],
     )
+    for year in EUROCONTROL_YEARS:
+        written[f"eurocontrol/{eurocontrol.dataset(year)}"] = eurocontrol.fetch_prb_norway(year)
     return written
 
 
@@ -223,6 +250,48 @@ def _plot_oppgjor(kvartal: pl.DataFrame, path: Path) -> Path:
     return path
 
 
+def _plot_bodo_produktivitet(df: pl.DataFrame, path: Path) -> Path:
+    """Bodø ACC, IFR-bevegelser per sektor-åpningstime — samme hull-teknikk som lønnsfiguren.
+
+    2022 mangler et tall for Bodø i kilden (den rapporten nevner bare Oslo
+    ACC med et konkret tall) — se ``clean.eurocontrol_kapasitet``. To
+    ``ax.plot``-kall, ikke ett med et hull i punktlista, av samme grunn som
+    i ``_plot_lonn``: en polyline ville tegnet en rett strek over 2022 som
+    om tallet var kjent der.
+    """
+    d = df.filter(pl.col("bodo_ifr_per_sektortime").is_not_null()).sort("aar")
+    forste = d.filter(pl.col("aar") <= 2021)
+    andre = d.filter(pl.col("aar") >= 2023)
+
+    fig, ax = plt.subplots(figsize=(11, 6))
+    ax.plot(forste["aar"], forste["bodo_ifr_per_sektortime"], "o-", color=FARGE_KAPASITET,
+            linewidth=2, markersize=6, label="Bodø ACC")
+    ax.plot(andre["aar"], andre["bodo_ifr_per_sektortime"], "o-", color=FARGE_KAPASITET,
+            linewidth=2, markersize=6)
+
+    ax.axvspan(2021.5, 2022.5, color="0.9", zorder=0)
+    ax.text(2022, ax.get_ylim()[0], "  ikke oppgitt\n  for Bodø i 2022",
+            fontsize=8.5, color="0.4", va="bottom", ha="center")
+
+    ax.set_ylabel("IFR-bevegelser per sektor-åpningstime")
+    ax.set_xlim(2019.6, 2024.6)
+    ax.set_xticks(range(2020, 2025))
+    ax.grid(True, alpha=0.2, linewidth=0.6)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.legend(frameon=False, fontsize=9.5, loc="upper left")
+    ax.set_title("Bodø-kontrollen styrer mer trafikk per driftstime", loc="left", fontsize=14, fontweight="bold")
+    fig.text(0.01, 0.005,
+             "Kilde: EUROCONTROL/PRB Annual Monitoring Report, Norge, 2020-2024. Bodø ACC er "
+             "kontrollsentralen med mest sammenhengende rapportering i disse dataene — ikke\n"
+             "nødvendigvis representativ for Oslo og Stavanger ACC. Feltet markerer 2022, der "
+             "rapporten ikke oppgir tallet for Bodø.",
+             fontsize=8, color="0.35")
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return path
+
+
 # --------------------------------------------------------------------------
 # Figurer sida tegner selv
 # --------------------------------------------------------------------------
@@ -300,10 +369,62 @@ def _chart_oppgjor(kvartal: pl.DataFrame) -> publish.Chart:
     )
 
 
+def _chart_bodo_produktivitet(df: pl.DataFrame) -> publish.Chart:
+    """Samme hull-teknikk som ``_chart_lonn`` — to merker, ikke ett med et hull i punktlista."""
+    d = df.filter(pl.col("bodo_ifr_per_sektortime").is_not_null()).sort("aar")
+    forste = d.filter(pl.col("aar") <= 2021)
+    andre = d.filter(pl.col("aar") >= 2023)
+
+    def merke(rader: pl.DataFrame, navn: str) -> publish.Mark:
+        return publish.Mark(
+            label=navn,
+            tone="kat1",
+            pin=True,
+            points=tuple(
+                (float(r["aar"]), round(float(r["bodo_ifr_per_sektortime"]), 2))
+                for r in rader.iter_rows(named=True)
+            ),
+            point_labels=tuple(
+                f"{int(r['aar'])} · {r['bodo_ifr_per_sektortime']:.2f} bevegelser/time"
+                for r in rader.iter_rows(named=True)
+            ),
+        )
+
+    return publish.Chart(
+        kind="line",
+        marks=(merke(forste, "Bodø ACC, 2020-2021"), merke(andre, "Bodø ACC, 2023-2024")),
+        fallback="bodo_produktivitet.png",
+        alt="Linjediagram: IFR-bevegelser per sektor-åpningstime ved Bodø ACC, 2020-2024, "
+        "med et hull i 2022 der tallet ikke er oppgitt.",
+        x=publish.Axis(
+            "", lo=2019.6, hi=2024.6,
+            ticks=tuple(float(a) for a in range(2020, 2025)),
+            tick_labels=tuple(str(a) for a in range(2020, 2025)),
+        ),
+        y=publish.Axis(
+            "IFR-bevegelser per sektor-åpningstime", lo=5.0, hi=8.0,
+            ticks=(5.0, 6.0, 7.0, 8.0),
+            tick_labels=("5,0", "6,0", "7,0", "8,0"),
+        ),
+        caption="Bodø ACC er valgt fordi det er den eneste av de tre kontrollsentralene med "
+        "tall for fire av fem år i denne kilden — ikke fordi den nødvendigvis er "
+        "representativ for Oslo og Stavanger ACC. 2022 mangler et tall for Bodø.",
+        source="EUROCONTROL/PRB Annual Monitoring Report, Norge, 2020-2024.",
+        width="full",
+    )
+
+
 # --------------------------------------------------------------------------
 # Artikkel
 # --------------------------------------------------------------------------
-def artikkel(lonn: pl.DataFrame, bestand: dict, bygg: dict) -> publish.Article:
+def artikkel(
+    lonn: pl.DataFrame,
+    bestand: dict,
+    bodo: pl.DataFrame,
+    bemanning: pl.DataFrame,
+    bygg: dict,
+    bygg_eurocontrol: dict,
+) -> publish.Article:
     siste_kv = _rad(lonn, "kvartalsvis", "2026K2")
     a2015, a2020, a2025 = (_rad(lonn, "aarlig", str(a)) for a in (2015, 2020, 2025))
     kv2025k4 = _rad(lonn, "kvartalsvis", "2025K4")
@@ -407,6 +528,44 @@ def artikkel(lonn: pl.DataFrame, bestand: dict, bygg: dict) -> publish.Article:
         ),
     )
 
+    trafikk_2019 = bodo.filter(pl.col("aar") == 2019).row(0, named=True)["ifr_bevegelser_norge_1000"]
+    trafikk_2024 = bodo.filter(pl.col("aar") == 2024).row(0, named=True)["ifr_bevegelser_norge_1000"]
+    andel_2019 = trafikk_2024 / trafikk_2019
+    ops_total = int(bemanning["atco_ops"].sum())
+    plan_total = int(bemanning["atco_plan"].sum())
+
+    arbeidsbelastning_seksjon = publish.Section(
+        "Arbeidsbelastning",
+        (
+            publish.Stats(tuple(
+                publish.Stat(
+                    f"{int(r['atco_ops'])} av {int(r['atco_plan'])}",
+                    f"{ACC_VISNINGSNAVN[r['acc']]} ({r['acc_kode']}), ATCO i tjeneste/plan",
+                    "2024, EUROCONTROL/PRB",
+                )
+                for r in bemanning.sort("acc").iter_rows(named=True)
+            )),
+            publish.Findings((
+                "NFFs uttalte konfliktgrunn er ikke lønn, men arbeidstid. SSBs egne "
+                "arbeidstidstall for yrket holder ikke mål her — se Metode for hvorfor. Det "
+                "som finnes og er sammenlignbart, er EUROCONTROL/PRBs årlige "
+                "overvåkingsrapport for Avinor Flysikring: bemanning mot selskapets egen "
+                "plan, og trafikk per driftstime. Ingen av delene måler det NFF konkret "
+                "beskriver — vaktlengde og pauser — men begge sier noe om belastningen "
+                f"rundt dem. I 2024 var alle tre kontrollsentraler bemannet under sin egen "
+                f"plan: {ops_total} flygeledere i operativ tjeneste mot en plan på "
+                f"{plan_total}.",
+                f"Trafikken har samtidig tatt seg opp igjen etter pandemien: Norge hadde "
+                f"{trafikk_2024:.0f}K IFR-bevegelser i 2024, {_pst(andel_2019 - 1)} fra "
+                f"2019-nivået ({trafikk_2019:.0f}K). Ved Bodø ACC — kontrollsentralen med "
+                "mest sammenhengende tall i denne kilden — har det gitt flere IFR-bevegelser "
+                "per sektor-åpningstime i alle årene rapporten oppgir tallet, sammenlignet "
+                "med 2019.",
+            )),
+            _chart_bodo_produktivitet(bodo),
+        ),
+    )
+
     metode = publish.Section(
         "Metode",
         (
@@ -451,38 +610,61 @@ def artikkel(lonn: pl.DataFrame, bestand: dict, bygg: dict) -> publish.Article:
                 "pressemateriell i forbindelse med meklingen, ikke fra SSB, og er snitt — "
                 "ikke median. De to tallseriene i denne saken er derfor ikke direkte "
                 "sammenlignbare uten forbeholdet i figurteksten over.",
-                f"Modellene `{MODEL_LONN}` og `{MODEL_BESTAND}`, bygget av statman "
-                f"{bygg['built_at'][:19].replace('T', ' ')}Z.",
+                "**SSBs arbeidstidstabell for yrket (tabell 12542) er sjekket og forkastet.** "
+                "Den bryter sysselsatte flygeledere ned på seks arbeidstidskategorier per år, "
+                "men tabellen selv opplyser at «alle ett-tall og to-tall … er endret til '0' "
+                "eller '3' for å ivareta personvernet» — for et yrke på 700-800 personer "
+                "fordelt på seks kategorier er de fleste cellene små nok til å rammes. Bare "
+                "hovedkategorien (35-37 timer, som over 80 % faller i) er stor nok til å "
+                "være til å stole på, og selv den sier ingenting om vaktlengde, pauser eller "
+                "overtid — det NFF faktisk beskriver. Tabellen er derfor ikke brukt her, "
+                "verken i tekst eller figur.",
+                "**EUROCONTROL/PRBs Annual Monitoring Report for Norge (2020-2024, én PDF "
+                "per år) er ikke en datatabell, men løpende tekst.** Tallene under "
+                "«Arbeidsbelastning» er hentet med regulære uttrykk mot nøyaktig de "
+                "formuleringene rapportene faktisk bruker, kontrollert mot alle fem årene — "
+                "se `statman/models/clean_eurocontrol_norge.py`. Rapportene nevner ikke alle "
+                "tre kontrollsentralene (Bodø/Oslo/Stavanger ACC) med et konkret tall hvert "
+                "år, og ATCO-bemanning har bare et grunntall for 2024 — tidligere år oppgir "
+                "kun avvik fra planen, ikke et tall å trekke fra. Ingen av hullene er fylt.",
+                f"Modellene `{MODEL_LONN}`, `{MODEL_BESTAND}`, `{MODEL_BODO}` og "
+                f"`{MODEL_BEMANNING}`, bygget av statman "
+                f"{bygg['built_at'][:19].replace('T', ' ')}Z "
+                f"(EUROCONTROL-modellene {bygg_eurocontrol['built_at'][:19].replace('T', ' ')}Z).",
             )),
         ),
     )
 
     return publish.Article(
         slug=SLUG,
-        kicker="Flygeledere · SSB tabell 11418 og 11658",
+        kicker="Flygeledere · SSB tabell 11418/11658 · EUROCONTROL/PRB",
         title="Lønna til flygelederne — og fire år ingen har målt den",
         lead=(
             "Flygelederne streiker. Uansett hva striden egentlig står om — partene er "
             "uenige, se «Lønnsoppgjøret» under — er dette hva SSB har publisert om lønna "
             "til yrket streiken gjelder: en tydelig realvekst i første halvdel av tiåret, et "
-            "fall i andre, og et firårig hull midt i der ingenting er målt i det hele tatt."
+            "fall i andre, og et firårig hull midt i der ingenting er målt i det hele tatt. "
+            "«Arbeidsbelastning» under ser på det NFF selv sier streiken faktisk handler om."
         ),
         published=PUBLISERT,
-        sections=(lonn_seksjon, reallonn_seksjon, oppgjor_seksjon, metode),
+        sections=(lonn_seksjon, reallonn_seksjon, oppgjor_seksjon, arbeidsbelastning_seksjon, metode),
         caveats=METRICS,
         provenance={
             "Kilde": f"SSB tabell {TABELL_KVARTAL} og {TABELL_LONN_AAR}, yrke {YRKE}",
             "Hentet": bygg["built_at"][:19] + "Z",
             "Yrkesstandard": f"STYRK-08 via SSB KLASS 7, per {STYRK_DATO}",
             "Lønnsoppgjørstall": f"Spekter/Avinor, snitt per {SPEKTER_DATO} (ikke SSB)",
-            "Modeller": f"{MODEL_LONN} · {MODEL_BESTAND}",
+            "Arbeidsbelastning": "EUROCONTROL/PRB Annual Monitoring Report, Norge, 2020-2024",
+            "Modeller": f"{MODEL_LONN} · {MODEL_BESTAND} · {MODEL_BODO} · {MODEL_BEMANNING}",
             "Bygget": bygg["built_at"][:19].replace("T", " ") + "Z",
         },
         files=(
             (f"{SLUG}.csv", "alle rader i mart.flygeledere_lonn"),
+            ("arbeidsbelastning.csv", "alle rader i mart.eurocontrol_bodo_arbeidsbelastning"),
             ("lonn.png", "median månedslønn, nominelt, 2015-2026"),
             ("reallonn.png", "median månedslønn, faste kroner, 2015-2026"),
             ("oppgjor.png", "de tre siste kvartalene mot lønnsoppgjøret"),
+            ("bodo_produktivitet.png", "IFR-bevegelser per sektor-åpningstime, Bodø ACC, 2020-2024"),
         ),
     )
 
@@ -491,13 +673,18 @@ def artikkel(lonn: pl.DataFrame, bestand: dict, bygg: dict) -> publish.Article:
 def main() -> list[Path]:
     lonn = io.load(MODEL_LONN)
     bestand = io.load(MODEL_BESTAND).row(0, named=True)
+    bodo = io.load(MODEL_BODO)
+    bemanning = io.load(MODEL_BEMANNING)
     bygg = io.read_manifest(MODEL_LONN)
+    bygg_eurocontrol = io.read_manifest(MODEL_BODO)
 
     target = io.output_dir() / SLUG
     target.mkdir(parents=True, exist_ok=True)
 
     csv_path = target / f"{SLUG}.csv"
     lonn.sort(["kilde", "periode"]).write_csv(csv_path)
+    eurocontrol_csv_path = target / "arbeidsbelastning.csv"
+    bodo.sort("aar").write_csv(eurocontrol_csv_path)
 
     figurer = [
         _plot_lonn(lonn, "median_lonn_nominell", "Median månedslønn, nominelt",
@@ -505,12 +692,14 @@ def main() -> list[Path]:
         _plot_lonn(lonn, "median_lonn_realt", f"Median månedslønn, {KPI_REFERANSE_MAANED[:4]}-kroner",
                    "Kroner per måned", target / "reallonn.png"),
         _plot_oppgjor(lonn.filter(pl.col("kilde") == "kvartalsvis"), target / "oppgjor.png"),
+        _plot_bodo_produktivitet(bodo, target / "bodo_produktivitet.png"),
     ]
 
-    art = artikkel(lonn, bestand, bygg)
+    art = artikkel(lonn, bestand, bodo, bemanning, bygg, bygg_eurocontrol)
     art.validate(target)
     return [
         csv_path,
+        eurocontrol_csv_path,
         *figurer,
         publish.markdown.write(art, target / "notat.md"),
         art.write(target),

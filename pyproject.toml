@@ -11,6 +11,7 @@ dependencies = [
     "typer>=0.12",
     "pyyaml>=6",
     "matplotlib>=3.9",
+    "pypdf>=6.16.1",
 ]
 
 [project.scripts]
