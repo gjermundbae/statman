@@ -121,6 +121,14 @@ LONN_KVARTAL: dict[str, list[float]] = {
     "0000": [43_000, 55_000],
 }
 
+# Den årlige reserven fra tabell 11418. 5112 mangler medianlønn i
+# kvartalstabellen i *begge* ender (kildens 0, se LONN_KVARTAL), og reserven
+# dekker bare starten — akkurat som i den ekte kilden, der de to tabellene
+# undertrykker ulikt og ingen av dem dekker alt. Slutten skal fortsatt mangle.
+LONN_AAR: dict[str, dict[str, float]] = {
+    "5112": {"2016": 38_000},
+}
+
 # KPI: 75 gjennom hele 2016, 100 gjennom hele 2026, lineært imellom. Da er
 # prisveksten nøyaktig 33,33 prosent, og deflatoren for 2016K2 er 4/3.
 #
@@ -328,6 +336,23 @@ def _lonn_kvartal_doc() -> dict[str, Any]:
     )
 
 
+def _lonn_aar_doc() -> dict[str, Any]:
+    aar = [k[:4] for k in KVARTAL]
+    verdier = [LONN_AAR.get(y, {}).get(a) for y in YRKER for a in aar]
+    return _doc(
+        {
+            "MaaleMetode": _dim(["01"], {"01": "Median"}),
+            "Yrke": _dim(YRKER, YRKESNAVN),
+            "Sektor": _dim(["ALLE"], {"ALLE": "Sum alle sektorer"}),
+            "Kjonn": _dim(["0"], {"0": "Begge kjønn"}),
+            "AvtaltVanlig": _dim(["0"], {"0": "I alt"}),
+            "ContentsCode": _dim(["Manedslonn"]),
+            "Tid": _dim(aar),
+        },
+        verdier,
+    )
+
+
 def _kpi_doc() -> dict[str, Any]:
     maaneder = _kpi_maaneder()
     spenn = KPI_SLUTT_AAR - KPI_START_AAR
@@ -349,6 +374,7 @@ def _skriv_raa() -> None:
     for dataset, doc in (
         ("11658_kvartal", _kvartal_doc()),
         ("11658_lonn_kvartal", _lonn_kvartal_doc()),
+        ("11418_lonn_aar", _lonn_aar_doc()),
         ("14700_kpi", _kpi_doc()),
         ("11658_siste", _siste_doc()),
         ("11658_kjonn", _kjonn_doc()),
@@ -398,6 +424,7 @@ def test_build_covers_the_whole_chain(built: dict[str, registry.BuildResult]) ->
         "clean.yrke_alder",
         "clean.yrke_sykefravaer",
         "clean.yrke_lonn_kvartal",
+        "clean.yrke_lonn_aar",
         "clean.konsumprisindeks",
         "mart.konsumpris_kvartal",
         "mart.arbeidsmarked_lonn_kvartal",
@@ -746,6 +773,28 @@ def test_the_first_year_point_equals_the_snapshots_starting_stock(
     forste = int(KVARTAL[0][:4])
     for kode in FIRESIDE:
         assert _aar(built, kode, forste)["lonnstakere"] == _yrke(built, kode)["lonnstakere_start"]
+
+
+def test_the_annual_wage_reserve_fills_a_hole_the_quarterly_series_cant(
+    built: dict[str, registry.BuildResult],
+) -> None:
+    """5112 mangler medianlønn i kvartalstabellen i begge ender (kildens 0).
+
+    Den årlige reserven (11418) har tallet i startåret, og skal brukes der
+    kvartalsserien selv er tom — men aldri i stedet for et tall den faktisk
+    har, og aldri for reallønn, som ikke er deflatert i reserven.
+    """
+    forste, siste = int(KVARTAL[0][:4]), int(KVARTAL[-1][:4])
+    assert _aar(built, "5112", forste)["median_lonn"] == LONN_AAR["5112"]["2016"]
+    # Reserven dekker ikke slutten heller — begge kilder er tomme der.
+    assert _aar(built, "5112", siste)["median_lonn"] is None
+    # Reallønn er ikke fylt fra reserven noe sted: den er ikke deflatert.
+    assert _aar(built, "5112", forste)["reallonn"] is None
+    assert _aar(built, "5112", siste)["reallonn"] is None
+
+    # Et yrke kvartalsserien selv dekker, skal ikke overstyres av reserven —
+    # selv om det skulle finnes et tall der òg.
+    assert _aar(built, "5111", forste)["median_lonn"] == LONN_KVARTAL["5111"][0]
 
 
 def test_a_zero_average_is_not_a_measurement(

@@ -1,4 +1,4 @@
-"""clean-laget for SSBs yrkesfordelte tabeller — 11658 og 14789.
+"""clean-laget for SSBs yrkesfordelte tabeller — 11658, 14789 og 11418.
 
 Mekanisk lag: json-stat2 brettes ut, kodene typenes, kolonnene får norske
 navn. Tre ting er verdt å vite:
@@ -24,8 +24,17 @@ navn. Tre ting er verdt å vite:
   siste kvartal. Skillet er ikke prinsipielt, det er hva figurene trenger: en
   tidslinje leseren kan dra i krever en serie bak hvert lag den fargelegger.
 
-Yrkeskoden er den samme STYRK-08-koden i begge tabellene, så de kobler rett
-på hverandre og på ``clean.styrk``.
+Yrkeskoden er den samme STYRK-08-koden i alle tre tabellene, så de kobler
+rett på hverandre og på ``clean.styrk``.
+
+**Tabell 11418 er en reserve for kvartalsserien, ikke en egen målestørrelse.**
+Kvartalstabellen (11658) undertrykker medianlønn langt oftere enn den årlige
+(11418) gjør — samme yrke kan mangle tallet i ni av ti kvartaler og likevel
+ha det i seks av ti år, fordi SSBs konfidensialitetsvurdering ikke gir
+samme svar i de to tabellene. Se ``clean.yrke_lonn_aar`` og
+``mart.arbeidsmarked_yrke_aar`` for hvordan reserven brukes: bare til å
+fylle et hull tidslinja ellers ville skravert, aldri i stedet for et tall
+kvartalsserien faktisk har.
 """
 
 from __future__ import annotations
@@ -43,6 +52,7 @@ RAW_KJONN_KVARTAL: Final[str] = "ssb/11658_kjonn_kvartal"
 RAW_ALDER: Final[str] = "ssb/11658_alder"
 RAW_TREKK_KVARTAL: Final[str] = "ssb/11658_trekk_kvartal"
 RAW_SYKEFRAVAER: Final[str] = "ssb/14789_sykefravaer"
+RAW_LONN_AAR: Final[str] = "ssb/11418_lonn_aar"
 
 # Statistikkvariablene vi henter fra 11658. Lista står her, ikke bare i
 # ingest-funksjonen, fordi den er kontrakten clean-laget kontrollerer mot.
@@ -302,5 +312,44 @@ def clean_yrke_sykefravaer(ctx: Context) -> Any:
         from _syk
         where value is not null
           and lower(contentscode) = 'sykefraversprosent'
+        order by yrke, aar
+    """)
+
+
+@model(
+    name="clean.yrke_lonn_aar",
+    deps=[f"raw:{RAW_LONN_AAR}"],
+    checks=[
+        "unique:yrke,aar",
+        "not_null:yrke_navn",
+        # Samme avveining som ellers i denne fila: kildens null beholdes som
+        # null, men skulle den noen gang skrive 0 der det ikke er noen å
+        # regne median for, er det mart-lagets jobb å tolke det, ikke clean.
+        "median_lonn_arlig >= 0",
+    ],
+    doc="SSB 11418, median månedslønn per yrke og år (november, alle sektorer). Reserve for kvartalsserien.",
+)
+def clean_yrke_lonn_aar(ctx: Context) -> Any:
+    """Årlig medianlønn — reserven for ``clean.yrke_lonn_kvartal``.
+
+    Samme STYRK-08-kode, men en annen tabell med en annen
+    konfidensialitetsvurdering: et yrke kan mangle medianlønn i ni av ti
+    kvartaler i 11658 og likevel ha den i seks av ti år her. Referansen er
+    november, ikke et kvartal, og tallet gjelder alle sektorer samlet — det
+    er ikke den samme størrelsen kvartalsserien måler, bare en god nok
+    tilnærming til å fylle et hull tidslinja ellers ville skravert. Se
+    ``mart.arbeidsmarked_yrke_aar`` for bruken: bare som reserve, aldri i
+    stedet for et tall kvartalsserien faktisk har.
+    """
+    ctx.register("_lonn_aar", jsonstat.to_frame(ctx.raw_latest(RAW_LONN_AAR)))
+    return ctx.sql("""
+        select
+            yrke                     as yrke,
+            yrke_label                as yrke_navn,
+            cast(tid as integer)      as aar,
+            cast(value as double)     as median_lonn_arlig
+        from _lonn_aar
+        where value is not null
+          and lower(contentscode) = 'manedslonn'
         order by yrke, aar
     """)

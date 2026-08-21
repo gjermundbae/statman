@@ -47,6 +47,7 @@ from statman.models.clean_ssb_yrke import (  # noqa: E402
     RAW_KJONN,
     RAW_KJONN_KVARTAL,
     RAW_KVARTAL,
+    RAW_LONN_AAR,
     RAW_LONN_KVARTAL,
     RAW_SISTE,
     RAW_SYKEFRAVAER,
@@ -68,6 +69,7 @@ from statman.sources import klass, ssb  # noqa: E402
 SLUG: Final[str] = "arbeidsmarked_yrke"
 TABELL: Final[str] = "11658"
 TABELL_SYKEFRAVAER: Final[str] = "14789"
+TABELL_LONN_AAR: Final[str] = "11418"
 
 # Publiseringsdatoen er en redaksjonell opplysning, ikke et tidsstempel.
 # Se befolkningsvekst.py for hvorfor den settes for hånd.
@@ -121,7 +123,7 @@ FARGE_MANGLER_STREK: Final[str] = "#7d766a"
 # Ingest
 # --------------------------------------------------------------------------
 def ingest() -> dict[str, Path]:
-    """Hent kodeverket og de sju utsnittene av SSBs yrkesstatistikk.
+    """Hent kodeverket og de ti utsnittene av SSBs yrkesstatistikk.
 
     Utsnittene er delt slik at hvert kall holder seg godt under SSBs grense
     på 150 000 celler, og slik at hvert av dem svarer på ett spørsmål:
@@ -131,6 +133,11 @@ def ingest() -> dict[str, Path]:
 
     De tre serieutsnittene er der for tidslinja: et lag leseren kan dra
     bakover i tid må ha en måling i hvert årspunkt, ikke bare i det siste.
+
+    Det siste utsnittet, den årlige medianlønna fra tabell 11418, er ikke
+    en egen målestørrelse — det er en reserve for lønnsserien fra 11658, som
+    undertrykker medianlønn langt oftere enn 11418 gjør. Se
+    ``clean.yrke_lonn_aar`` og ``mart.arbeidsmarked_yrke_aar``.
     """
     ssb.probe()
     written: dict[str, Path] = {
@@ -181,6 +188,15 @@ def ingest() -> dict[str, Path]:
         (RAW_SYKEFRAVAER, TABELL_SYKEFRAVAER, {
             "Yrke": "*", "Kjonn": "0",
             "ContentsCode": "Sykefraversprosent", "Tid": "*",
+        }),
+        # Reserven for lønnsserien: 582 × 11 celler, årlig i stedet for
+        # kvartalsvis. Median, alle sektorer, begge kjønn, alle
+        # arbeidstider — den ene kombinasjonen som svarer til nivået
+        # kvartalsserien måler. Se moduldocstringen over.
+        (RAW_LONN_AAR, TABELL_LONN_AAR, {
+            "MaaleMetode": "01", "Yrke": "*", "Sektor": "ALLE",
+            "Kjonn": "0", "AvtaltVanlig": "0",
+            "ContentsCode": "Manedslonn", "Tid": "*",
         }),
         # Deflatoren. Bare totalindeksen; undergruppene trengs ikke.
         (RAW_KPI, TABELL_KPI, {

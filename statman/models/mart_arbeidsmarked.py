@@ -455,6 +455,7 @@ def mart_arbeidsmarked_hovedgruppe_kvartal(ctx: Context) -> Any:
         "clean.yrke_kjonn_kvartal",
         "clean.yrke_trekk_kvartal",
         "clean.yrke_sykefravaer",
+        "clean.yrke_lonn_aar",
         "mart.arbeidsmarked_lonn_kvartal",
     ],
     checks=[
@@ -500,10 +501,20 @@ def mart_arbeidsmarked_yrke_aar(ctx: Context) -> Any:
     avlesning tidslinja kan lage følger nøyaktig den regelen artikkelen
     selv følger. Se ``PERIODE_AAR`` og moduldocstringen over.
 
-    **Hull forblir hull.** Et yrke som ikke hadde publisert medianlønn i
-    2019 får null der, ikke fjorårets tall og ikke et interpolert. Figuren
-    skraverer det, og skraveringen er en opplysning: SSB publiserer ikke
-    median for de minste yrkene, og hvilke yrker som er små endrer seg.
+    **Hull forblir hull — men ett av dem har en reserve.** Et yrke som ikke
+    hadde publisert medianlønn i kvartalsserien (11658) får null der, ikke
+    fjorårets tall og ikke et interpolert — med ett unntak: finnes tallet i
+    stedet i den årlige tabellen (11418, ``clean.yrke_lonn_aar``), brukes
+    det. De to tabellene undertrykker ulikt — samme yrke kan mangle
+    medianlønn i ni av ti kvartaler og likevel ha den i seks av ti år — og
+    reserven fyller nettopp den forskjellen, ikke noe mer. Den er en annen
+    referansemåned og alle sektorer samlet, så et yrke som bytter mellom de
+    to kildene fra ett år til det neste kan hoppe litt av en grunn som ikke
+    er en lønnsendring; det er verdt å vite, ikke verdt å la stå usett.
+    Reallønna beholder hullet uansett — den deflaterte reserven finnes
+    ikke, og skal ikke regnes ut her. Der ingen av de to har et tall,
+    skraverer figuren det, og skraveringen er en opplysning: SSB publiserer
+    ikke median for de minste yrkene, og hvilke yrker som er små endrer seg.
 
     **Sykefraværet er årlig og ligger et år etter.** Tabell 14789 er ikke
     kvartalsvis, så årspunktet kobles på kalenderåret. Det siste
@@ -559,6 +570,13 @@ def mart_arbeidsmarked_yrke_aar(ctx: Context) -> Any:
                 l.median_lonn_realt    as reallonn
             from mart_arbeidsmarked_lonn_kvartal l
             join punkter p on p.kvartal = l.kvartal
+        ),
+        -- Reserven fra 11418. Bare året trengs — den har ikke kvartaler å
+        -- koble på punkter med, og skal uansett bare fylle et hull
+        -- kvartalsserien selv lot stå.
+        reserve as (
+            select yrke, aar, median_lonn_arlig
+            from clean_yrke_lonn_aar
         )
         select
             b.yrke                                              as yrke,
@@ -576,8 +594,11 @@ def mart_arbeidsmarked_yrke_aar(ctx: Context) -> Any:
             k.kvinner / nullif(cast(b.lonnstakere as double), 0) as kvinneandel,
 
             -- Kildens 0 betyr «ingen å regne over». Se docstringen til
-            -- clean.yrke_trekk_kvartal.
-            nullif(l.median_lonn, 0)                            as median_lonn,
+            -- clean.yrke_trekk_kvartal. Mangler kvartalsserien tallet helt,
+            -- prøves reserven fra 11418 før feltet blir stående som null —
+            -- se moduldocstringen for hvorfor det er trygt bare for nivået,
+            -- ikke for reallønna.
+            coalesce(nullif(l.median_lonn, 0), r.median_lonn_arlig) as median_lonn,
             nullif(l.reallonn, 0)                               as reallonn,
             nullif(t.gjennomsnittsalder, 0)                     as gjennomsnittsalder,
             nullif(t.avtalt_arbeidstid, 0)                      as avtalt_arbeidstid,
@@ -589,6 +610,7 @@ def mart_arbeidsmarked_yrke_aar(ctx: Context) -> Any:
         left join kjonn k on k.yrke = b.yrke and k.aar = b.aar
         left join trekk t on t.yrke = b.yrke and t.aar = b.aar
         left join lonn  l on l.yrke = b.yrke and l.aar = b.aar
+        left join reserve r on r.yrke = b.yrke and r.aar = b.aar
         left join clean_yrke_sykefravaer f on f.yrke = b.yrke and f.aar = b.aar
         order by b.yrke, b.aar
     """)
